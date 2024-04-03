@@ -145,3 +145,60 @@ if __name__=="__main__":
 
     for n in network:
         n.print()
+
+
+
+#########################################################33
+# Code for inspiration
+# -- ANN Activation ------------------------------------------------------ -- #
+
+def act(weights, aVec, nInput, nOutput, inPattern):
+  """Returns FFANN output given a single input pattern
+  If the variable weights is a vector it is turned into a square weight matrix.
+  
+  Allows the network to return the result of several samples at once if given a matrix instead of a vector of inputs:
+      Dim 0 : individual samples
+      Dim 1 : dimensionality of pattern (# of inputs)
+
+  Args:
+    weights   - (np_array) - ordered weight matrix or vector
+                [N X N] or [N**2]
+    aVec      - (np_array) - activation function of each node 
+                [N X 1]    - stored as ints (see applyAct in ann.py)
+    nInput    - (int)      - number of input nodes
+    nOutput   - (int)      - number of output nodes
+    inPattern - (np_array) - input activation
+                [1 X nInput] or [nSamples X nInput]
+
+  Returns:
+    output    - (np_array) - output activation
+                [1 X nOutput] or [nSamples X nOutput]
+  """
+  # Turn weight vector into weight matrix
+  if np.ndim(weights) < 2:
+      nNodes = int(np.sqrt(np.shape(weights)[0]))
+      wMat = np.reshape(weights, (nNodes, nNodes))
+  else:
+      nNodes = np.shape(weights)[0]
+      wMat = weights
+  wMat[np.isnan(wMat)]=0
+
+  # Vectorize input
+  if np.ndim(inPattern) > 1:
+      nSamples = np.shape(inPattern)[0]
+  else:
+      nSamples = 1
+
+  # Run input pattern through ANN    
+  nodeAct  = np.zeros((nSamples,nNodes))
+  nodeAct[:,0] = 1 # Bias activation
+  nodeAct[:,1:nInput+1] = inPattern
+
+  # Propagate signal through hidden to output nodes
+  iNode = nInput+1
+  for iNode in range(nInput+1,nNodes):
+      rawAct = np.dot(nodeAct, wMat[:,iNode]).squeeze()
+      nodeAct[:,iNode] = applyAct(aVec[iNode], rawAct) 
+      #print(nodeAct)
+  output = nodeAct[:,-nOutput:]   
+  return output
