@@ -56,10 +56,12 @@ def compiler(ngenomes : [NodeGenome], cgenomes : [ConnectionGenome]):
                 c.weight,
                 neurons[c.in_neuron].layer)
 
+    ff = FeedForward()
     for neuron in neurons:
-        pass
-
-    return neurons
+        ff.add_neuron(neuron)
+        
+    ff.compile()
+    return ff
 
 class Neuron:
 
@@ -93,7 +95,8 @@ class Neuron:
 
 class Layer:
 
-    def __init__(self):
+    def __init__(self,index):
+        self.layer_index = index
         self.neurons = []    
 
         self.weigths = None
@@ -105,41 +108,47 @@ class Layer:
         pass
 
     def add_neuron(self,neuron):
-        self.inputs_len += len(neuron.inputs)
         self.outputs_len += 1
+        if len(neuron.input_list) > 0:
+            self.inputs_len = jnp.max(jnp.array(neuron.input_list))+1
         self.neurons.append(neuron)
         # neuron.
 
     def compile(self):
 
-        self.weigths = jnp.zeros((self.inputs_len,self.inputs_len))
-        self.inputs  = jnp.zeros((self.inputs_len))
-        self.outputs = jnp.zeros((self.outputs_len))
+        self.weigths = jnp.zeros((self.outputs_len,self.inputs_len))
+        self.inputs  = jnp.zeros((self.inputs_len),dtype = jnp.int32)
+        self.outputs = jnp.zeros((self.outputs_len),dtype = jnp.int32)
 
         filled_in_length = 0
         for n_i,n in enumerate(self.neurons):
-           self.inputs[filled_in_length:filled_in_length + len(n.input_list)] = jnp.array(n.input_list)
-           filled_in_length += len(n.input_list) 
+            if len(self.inputs) > 0:
+                self.inputs = self.inputs.at[jnp.array(n.input_list)].set(jnp.array(n.input_list))
+                filled_in_length += len(n.input_list) 
 
-           self.outputs[n_i] = n.index
+                self.outputs = self.outputs.at[n_i].set(n.index)
 
-           self.weigths[n_i,n.input_list] = jnp(n.weights)
-
+                self.weigths = self.weigths.at[n_i,n.input_list].set(jnp.array(n.weights))            
         # now layer is complied
 
     def forward(self,input):
-        return jnp.dot(input[self.inputs],self.weigths)
+        return jnp.dot(input[self.inputs],self.weigths.T)
 
 class FeedForward:
 
     def __init__(self):
-        self.layers = []
+        self.index = 0
+        self.size = 0
+        self.layers = [Layer(self.index)]
 
     def add_neuron(self,neuron):
+        self.size += 1
         layer_index = neuron.getLayer()
         
-        for _ in range(len(self.layers) - layer_index):
-            self.layers.append(Layer())
+        while layer_index >= len(self.layers):
+            print(len(self.layers), layer_index)
+            self.index += 1
+            self.layers.append(Layer(self.index))
 
         self.layers[layer_index].add_neuron(neuron)
         
@@ -150,11 +159,22 @@ class FeedForward:
 
     def activate(self,x):
 
-        output = jnp.zeros(len(x))        
+        output = jnp.zeros(self.size)
+        output = output.at[:len(x)].set(x)
+                        
         for l in self.layers:
-            output[l.outputs] = l.compile(x)
+            if l.layer_index > 0:
+                output = output.at[l.outputs].set(l.forward(output))
 
         return output[self.layers[-1].outputs]
+
+    def print(self):
+
+        for l in self.layers:
+            print("====================================")
+            print(f"weigths: {l.weigths}")
+            print(f"inputs:  {l.inputs}")
+            print(f"outputs: {l.outputs}")
 
 
 class Neat:
@@ -177,7 +197,7 @@ class Network:
 
 if __name__=="__main__":
     pass
-
+    #### TEST 1 ######
     genome_nodes = [
         NodeGenome(NodeTypes.INPUT,0),
         NodeGenome(NodeTypes.INPUT,1),
@@ -199,62 +219,37 @@ if __name__=="__main__":
 
     network = compiler(genome_nodes,genome_connections)
 
-    for n in network:
-        n.print()
+    network.print()
+
+    x = jnp.array([1.,1.,1.]) # output should be 1.25 for three times 1. for this network
+    out = network.activate(x)
+    print(f"result: {out}")
+    assert out == 1.25
+
+    #### TEST 2 ######
+    genome_nodes = [
+        NodeGenome(NodeTypes.INPUT,0),
+        NodeGenome(NodeTypes.INPUT,1),
+        NodeGenome(NodeTypes.INPUT,2),
+        NodeGenome(NodeTypes.HIDDEN,3),
+        NodeGenome(NodeTypes.HIDDEN,4),
+        NodeGenome(NodeTypes.OUTPUT,5)
+    ]
+
+    genome_connections = [
+        ConnectionGenome(0,0,3, 0.5, 1),
+        ConnectionGenome(0,1,3, 0.5, 1),
+        ConnectionGenome(0,1,4, 0.5, 1),
+        ConnectionGenome(0,2,4, 0.5, 1),
+        ConnectionGenome(0,3,5, 0.5, 1),
+        ConnectionGenome(0,4,5, 0.5, 1)
+    ]
+
+    network = compiler(genome_nodes,genome_connections)
+
+    x = jnp.array([1.,1.,1.]) # output should be 1.25 for three times 1. for this network
+    out = network.activate(x)
+    print(f"result: {out}")
+    assert out == 1
 
 
-
-#########################################################33
-# Code for inspiration
-# -- ANN Activation ------------------------------------------------------ -- #
-
-def act(weights, aVec, nInput, nOutput, inPattern):
-  """Returns FFANN output given a single input pattern
-  If the variable weights is a vector it is turned into a square weight matrix.
-  
-  Allows the network to return the result of several samples at once if given a matrix instead of a vector of inputs:
-      Dim 0 : individual samples
-      Dim 1 : dimensionality of pattern (# of inputs)
-
-  Args:
-    weights   - (np_array) - ordered weight matrix or vector
-                [N X N] or [N**2]
-    aVec      - (np_array) - activation function of each node 
-                [N X 1]    - stored as ints (see applyAct in ann.py)
-    nInput    - (int)      - number of input nodes
-    nOutput   - (int)      - number of output nodes
-    inPattern - (np_array) - input activation
-                [1 X nInput] or [nSamples X nInput]
-
-  Returns:
-    output    - (np_array) - output activation
-                [1 X nOutput] or [nSamples X nOutput]
-  """
-  # Turn weight vector into weight matrix
-  if np.ndim(weights) < 2:
-      nNodes = int(np.sqrt(np.shape(weights)[0]))
-      wMat = np.reshape(weights, (nNodes, nNodes))
-  else:
-      nNodes = np.shape(weights)[0]
-      wMat = weights
-  wMat[np.isnan(wMat)]=0
-
-  # Vectorize input
-  if np.ndim(inPattern) > 1:
-      nSamples = np.shape(inPattern)[0]
-  else:
-      nSamples = 1
-
-  # Run input pattern through ANN    
-  nodeAct = np.zeros((nSamples,nNodes))
-  nodeAct[:,0] = 1 # Bias activation
-  nodeAct[:,1:nInput+1] = inPattern
-
-  # Propagate signal through hidden to output nodes
-  iNode = nInput+1
-  for iNode in range(nInput+1,nNodes):
-      rawAct = np.dot(nodeAct, wMat[:,iNode]).squeeze()
-      nodeAct[:,iNode] = applyAct(aVec[iNode], rawAct) 
-      #print(nodeAct)
-  output = nodeAct[:,-nOutput:]   
-  return output
