@@ -127,6 +127,8 @@ class Layer:
 
         # now layer is complied
 
+    def forward(self,input):
+        return jnp.dot(input[self.inputs],self.weigths)
 
 class FeedForward:
 
@@ -141,8 +143,19 @@ class FeedForward:
 
         self.layers[layer_index].add_neuron(neuron)
         
+    def compile(self):
 
-        pass  
+        for l in self.layers:
+            l.compile()
+
+    def activate(self,x):
+
+        output = jnp.zeros(len(x))        
+        for l in self.layers:
+            output[l.outputs] = l.compile(x)
+
+        return output[self.layers[-1].outputs]
+
 
 class Neat:
 
