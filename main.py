@@ -56,6 +56,9 @@ def compiler(ngenomes : [NodeGenome], cgenomes : [ConnectionGenome]):
                 c.weight,
                 neurons[c.in_neuron].layer)
 
+    for neuron in neurons:
+        pass
+
     return neurons
 
 class Neuron:
@@ -74,6 +77,12 @@ class Neuron:
         if layer > self.layer:
             self.layer = layer + 1
         
+    def getLayer(self):
+        return self.layer
+
+    def get(self):
+        return {self.layer : jnp.array(self.weights)}
+
     def print(self):
         print(
         f"self.index:     {self.index}\
@@ -85,21 +94,55 @@ class Neuron:
 class Layer:
 
     def __init__(self):
-        self.neurons = []
+        self.neurons = []    
+
+        self.weigths = None
+        self.inputs  = None
+        self.outputs = None
+
+        self.inputs_len  = 0
+        self.outputs_len = 0
         pass
 
     def add_neuron(self,neuron):
+        self.inputs_len += len(neuron.inputs)
+        self.outputs_len += 1
         self.neurons.append(neuron)
+        # neuron.
 
     def compile(self):
-        self.weigths = jnp.array([neuron.weights for neuron in self.neurons])
-        self.inputs = jnp.zeros()
+
+        self.weigths = jnp.zeros((self.inputs_len,self.inputs_len))
+        self.inputs  = jnp.zeros((self.inputs_len))
+        self.outputs = jnp.zeros((self.outputs_len))
+
+        filled_in_length = 0
+        for n_i,n in enumerate(self.neurons):
+           self.inputs[filled_in_length:filled_in_length + len(n.input_list)] = jnp.array(n.input_list)
+           filled_in_length += len(n.input_list) 
+
+           self.outputs[n_i] = n.index
+
+           self.weigths[n_i,n.input_list] = jnp(n.weights)
+
+        # now layer is complied
 
 
 class FeedForward:
 
-    def __init__(self,layers):
-                
+    def __init__(self):
+        self.layers = []
+
+    def add_neuron(self,neuron):
+        layer_index = neuron.getLayer()
+        
+        for _ in range(len(self.layers) - layer_index):
+            self.layers.append(Layer())
+
+        self.layers[layer_index].add_neuron(neuron)
+        
+
+        pass  
 
 class Neat:
 
@@ -190,7 +233,7 @@ def act(weights, aVec, nInput, nOutput, inPattern):
       nSamples = 1
 
   # Run input pattern through ANN    
-  nodeAct  = np.zeros((nSamples,nNodes))
+  nodeAct = np.zeros((nSamples,nNodes))
   nodeAct[:,0] = 1 # Bias activation
   nodeAct[:,1:nInput+1] = inPattern
 
