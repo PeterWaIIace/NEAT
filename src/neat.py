@@ -1,5 +1,3 @@
-
-
 ## 1) So what this neat has to do, it has to accept genome and decode it into network
 ## 2) Each genome is divided into cells containing node parameters [connection, bias ]
 
@@ -19,27 +17,10 @@
 # Out
 # Weight
 import jax.numpy as jnp
-from enum import Enum
 
-class NodeTypes(Enum):
-    HIDDEN = 1 
-    INPUT = 2
-    OUTPUT = 3 
+from utils import NodeTypes
+from evo import NodeGenome, ConnectionGenome 
 
-class NodeGenome:
-
-    def __init__(self,type,index):
-        self.type  = type 
-        self.index = index 
-
-class ConnectionGenome:
-
-    def __init__(self,innov,in_index,out_index,weight,enabled):
-        self.innov = innov 
-        self.in_neuron = in_index 
-        self.out_neuron = out_index
-        self.weight = weight
-        self.enabled = enabled 
 
 def compiler(ngenomes : [NodeGenome], cgenomes : [ConnectionGenome]):
 
