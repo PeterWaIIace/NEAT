@@ -27,7 +27,7 @@ def compiler(ngenomes : [NodeGene], cgenomes : [ConnectionGene]):
     neurons = []
     for n in ngenomes:
         neurons.append(
-            Neuron(n)           
+            Neuron(n)
         )
 
     for c in cgenomes:
@@ -59,7 +59,7 @@ class Neuron:
             self.layer+=1
         if layer > self.layer:
             self.layer = layer + 1
-        
+
     def getLayer(self):
         return self.layer
 
@@ -78,7 +78,7 @@ class Layer:
 
     def __init__(self,index):
         self.layer_index = index
-        self.neurons = []    
+        self.neurons = []
 
         self.weigths = None
         self.inputs  = None
@@ -142,7 +142,7 @@ class FeedForward:
 
         output = jnp.zeros(self.size)
         output = output.at[:len(x)].set(x)
-             
+
         for l in self.layers:
             if l.layer_index > 0:
                 output = output.at[l.outputs].set(l.forward(output))
@@ -166,35 +166,33 @@ class Neat:
 
 class Network:
 
-    def __init__(self): 
+    def __init__(self):
         self.genome = []
         pass
 
     def evalueate(self,genome):
         self.genom = genome
-        
 
-        pass
 
 if __name__=="__main__":
     #### TEST 1 ######
     genome_nodes = [
-        NodeGene(NodeTypes.INPUT,0),
-        NodeGene(NodeTypes.INPUT,1),
-        NodeGene(NodeTypes.INPUT,2),
+        NodeGene(NodeTypes.INPUT ,0),
+        NodeGene(NodeTypes.INPUT ,1),
+        NodeGene(NodeTypes.INPUT ,2),
         NodeGene(NodeTypes.HIDDEN,3),
         NodeGene(NodeTypes.HIDDEN,4),
         NodeGene(NodeTypes.OUTPUT,5)
     ]
 
     genome_connections = [
-        ConnectionGene(0,0,3, 0.5, 1),
-        ConnectionGene(0,1,3, 0.5, 1),
-        ConnectionGene(0,1,4, 0.5, 1),
-        ConnectionGene(0,2,4, 0.5, 1),
-        ConnectionGene(0,3,4, 0.5, 1),
-        ConnectionGene(0,4,5, 0.5, 1),
-        ConnectionGene(0,1,5, 0.5, 1)
+        ConnectionGene(0,0,0,3,0.5,1),
+        ConnectionGene(1,0,1,3,0.5,1),
+        ConnectionGene(2,0,1,4,0.5,1),
+        ConnectionGene(3,0,2,4,0.5,1),
+        ConnectionGene(4,0,3,4,0.5,1),
+        ConnectionGene(5,0,4,5,0.5,1),
+        ConnectionGene(6,0,1,5,0.5,1)
     ]
 
     network = compiler(genome_nodes,genome_connections)
@@ -217,12 +215,12 @@ if __name__=="__main__":
     ]
 
     genome_connections = [
-        ConnectionGene(0,0,3, 0.5, 1),
-        ConnectionGene(0,1,3, 0.5, 1),
-        ConnectionGene(0,1,4, 0.5, 1),
-        ConnectionGene(0,2,4, 0.5, 1),
-        ConnectionGene(0,3,5, 0.5, 1),
-        ConnectionGene(0,4,5, 0.5, 1)
+        ConnectionGene(0,0,0,3, 0.5, 1),
+        ConnectionGene(1,0,1,3, 0.5, 1),
+        ConnectionGene(2,0,1,4, 0.5, 1),
+        ConnectionGene(3,0,2,4, 0.5, 1),
+        ConnectionGene(4,0,3,5, 0.5, 1),
+        ConnectionGene(5,0,4,5, 0.5, 1)
     ]
 
     network = compiler(genome_nodes,genome_connections)

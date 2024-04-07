@@ -26,11 +26,11 @@ def test_adding_node_1():
     genome = Genome()
 
     genome.cgenome[0].enabled = 0
-    
+
     genome.set_innovation(0)
-    genome.add_node(genome.cgenome[0],1.0)
-    innovation = genome.get_innovation(0)
-    
+    assert True is genome.add_node(genome.cgenome[0],1.0)
+    innovation = genome.get_innovation()
+
     network = compiler(genome.ngenome,genome.cgenome)
 
     x = jnp.array([1.,1.,1.]) # output should be 1.25 for three times 1. for this network
@@ -42,19 +42,28 @@ def test_adding_node_1():
 def test_adding_connection_1():
 
     genome = Genome()
+    for cgenome in genome.cgenome:
+        print(cgenome.in_neuron,cgenome.out_neuron)
 
     genome.set_innovation(0)
-    genome.add_node(genome.cgenome[0],1.0)
-    genome.add_connection(genome.ngenome[2].index,genome.ngenome[-1].index,1.0)
-    innovation = genome.get_innovation(0)
-    
+    assert True is genome.add_node(genome.cgenome[0],1.0)
+    assert True is genome.add_node(genome.cgenome[0],1.0)
+    assert True is genome.add_connection(2,genome.ngenome[-1].index,1.0)
+    innovation = genome.get_innovation()
+
     network = compiler(genome.ngenome,genome.cgenome)
 
     x = jnp.array([1.,1.,1.]) # output should be 1.25 for three times 1. for this network
     out = network.activate(x)
-    print(f"result: {out}")
-    assert out == 4
-    assert innovation == 3
+    assert out == 5
+    assert innovation == 5
 
+def test_adding_connection_2():
 
+    genome = Genome()
 
+    genome.set_innovation(0)
+
+    genome.add_node(genome.cgenome[0],1.0)
+    assert True  is genome.add_connection(2, genome.ngenome[-1].index, 1.0)
+    assert False is genome.add_connection(genome.ngenome[-1].index, 2, 1.0)

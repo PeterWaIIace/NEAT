@@ -2,12 +2,17 @@ from dataclasses import dataclass, field
 from src.utils import NodeTypes
 from typing import List
 
+from jax import random
 
 class NodeGene:
 
-    def __init__(self, type, index):
+    def __init__(self, type, index, connected_nodes = None):
         self.type = type
         self.index = index
+        if not connected_nodes:
+            self.connected_nodes = set()
+        else:
+            self.connected_nodes = connected_nodes
 
 
 class ConnectionGene:
@@ -21,31 +26,48 @@ class ConnectionGene:
         self.enabled = enabled
 
 
-@dataclass
 class Genome:
-    innovation: int = 0
 
-    ngenome: List[NodeGene] = field(default_factory=lambda: [
-        NodeGene(NodeTypes.INPUT, 0),
-        NodeGene(NodeTypes.INPUT, 1),
-        NodeGene(NodeTypes.INPUT, 2),
-        NodeGene(NodeTypes.OUTPUT, 3)
-    ])
-    cgenome: List[ConnectionGene] = field(default_factory=lambda: [
-        ConnectionGene(0, 0, 0, 3, 1.0, 1),
-        ConnectionGene(1, 0, 1, 3, 1.0, 1),
-        ConnectionGene(2, 0, 2, 3, 1.0, 1)
-    ])
+    def __init__(self):
+        self.innovation: int = 0
+
+        self.ngenome = [
+            NodeGene(NodeTypes.INPUT, 0),
+            NodeGene(NodeTypes.INPUT, 1),
+            NodeGene(NodeTypes.INPUT, 2),
+            NodeGene(NodeTypes.OUTPUT, 3)
+        ]
+
+        self.cgenome = [
+            ConnectionGene(0, 0, 0, 3, 1.0, 1),
+            ConnectionGene(1, 0, 1, 3, 1.0, 1),
+            ConnectionGene(2, 0, 2, 3, 1.0, 1)
+        ]
+
+    def get_input_nodes(self):
+        return [node for node in self.ngenome if node.type == NodeTypes.INPUT]
+
+    def get_output_nodes(self):
+        return [node for node in self.ngenome if node.type == NodeTypes.OUTPUT]
 
     def add_node(self, connection, weight):
-        new_node = NodeGene(NodeTypes.HIDDEN, len(self.ngenome))
+        # remember all connected nodes so no recurrent connection can be made
+        input_node = [
+            gene for gene in self.ngenome if gene.index == connection.in_neuron][0]
+
+        new_node = NodeGene(NodeTypes.HIDDEN, len(
+            self.ngenome), input_node.connected_nodes)
+
         self.ngenome.append(new_node)
         if (
             self.add_connection(connection.in_neuron,
-                                new_node.index, weight)
+                                new_node.index,
+                                weight)
             and
             self.add_connection(
-                new_node.index, connection.out_neuron, weight)
+                new_node.index,
+                connection.out_neuron,
+                weight)
         ):
             # disable connection:
             self.cgenome[connection.index].enabled = 0
@@ -54,10 +76,26 @@ class Genome:
             return False
 
     def add_connection(self, in_node, out_node, weight):
-        if not any(con.in_neuron == in_node and con.out_neuron == out_node for con in self.cgenome):
+        connected_nodes = self.ngenome[in_node].connected_nodes
+
+        no_forward_connection = not any(
+            con.in_neuron == in_node and con.out_neuron == out_node for con in self.cgenome)
+        no_recurrent_connection = not (out_node in connected_nodes)
+            
+        if no_forward_connection and no_recurrent_connection:
             self.innovation += 1
+            # add new connected node to connected nodes
+            connected_nodes.add(in_node)
+            self.ngenome[out_node].connected_nodes.update(connected_nodes)
             self.cgenome.append(ConnectionGene(
-                len(self.cgenome), self.innovation, in_node, out_node, weight, 1))
+                len(self.cgenome),
+                self.innovation,
+                in_node,
+                out_node,
+                weight,
+                1)
+            )
+
             return True
         else:
             return False
@@ -113,3 +151,14 @@ class Evomixer:
         W = sum_weights/number_of_matched_weights
 
         d = (D*c1)/N + (E*c2)/N + W*c3
+        return d
+
+    def mutate(self, mutate_rate=0.2):
+
+        for genome in self.genomes:
+
+            # mutate - add connection
+            if mutate_rate > random.uniform(random.PRNGKey(0), shape=(1,)):
+                genome.add_connection()
+
+            # mutate - add node on existing connection
