@@ -169,8 +169,8 @@ class Evomixer:
             min_val  = genome.ngenome[0].index 
             max_val  = genome.ngenome[-1].index 
             
-            rand_input_index = random.randint(random.PRNGKey(0), shape=(1,), minval = min_val, max_val = max_val)
-            rand_output_index = random.randint(random.PRNGKey(0), shape=(1,), minval = min_val, max_val = max_val)
+            rand_input_index = random.randint(random.PRNGKey(0), shape=(1,), minval = min_val, maxval = max_val)
+            rand_output_index = random.randint(random.PRNGKey(0), shape=(1,), minval = min_val, maxval = max_val)
             
             n_in  = genome.get_possible_inputs()[rand_input_index].index
             n_out = genome.get_possible_outputs()[rand_output_index].index
