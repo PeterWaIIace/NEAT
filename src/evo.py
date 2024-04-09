@@ -26,6 +26,43 @@ class ConnectionGene:
         self.enabled = enabled
 
 
+def δ(self, genome_1, genome_2, c1=1.0, c2=1.0, c3=1.0, N=1.0):
+
+    D = 0  # disjoint genes
+    E = 0  # excess genes
+
+    # check which genome is shorter:
+    less_innovative_genome = genome_1 if genome_1.innovation < genome_2.innovation else genome_2
+    different_genes_1_2 = set([cgene.innovation for cgene in genome_1.cgenome]) - \
+        set([cgene.innovation for cgene in genome_2.cgenome])
+    different_genes_2_1 = set([cgene.innovation for cgene in genome_2.cgenome]) - \
+        set([cgene.innovation for cgene in genome_1.cgenome])
+
+    all_different_genes = different_genes_1_2 | different_genes_2_1
+
+    for diffg in all_different_genes:
+
+        if diffg < less_innovative_genome.innovation:
+            D += 1
+        else:
+            E += 1
+
+    sum_weights = 0
+    number_of_matched_weights = 0
+    for _, value_1 in enumerate(genome_1.cgenome):
+        for _, value_2 in enumerate(genome_2.cgenome):
+            if value_1.innovation == value_2.innovation:
+                number_of_matched_weights += 1
+                sum_weights += abs(value_1.weight - value_2.weight)
+
+    W = sum_weights/number_of_matched_weights
+
+    d = (D*c1)/N + (E*c2)/N + W*c3
+    return d
+
+def sh(self,δ,δ_t=0.2):
+    return δ < δ_t
+
 class Genome:
 
     def __init__(self):
@@ -112,52 +149,13 @@ class Genome:
     def get_possible_nodes(self):
         return [gene.index for gene in self.ngenome if gene.type is not NodeTypes.INPUT]
     
-class Evomixer:
+class EvoManager:
 
-    def __init__(self, population_size=50):
-
+    def __init__(self):
         self.innovation = 0
-        self.population_size = population_size
-        self.genomes = [Genome()] * 50
-
-        pass
 
     def get_population(self):
-        return self.genomes
-
-    def compatibility_distance(self, genome_1, genome_2, c1=1.0, c2=1.0, c3=1.0, N=1.0):
-
-        D = 0  # disjoint genes
-        E = 0  # excess genes
-
-        # check which genome is shorter:
-        less_innovative_genome = genome_1 if genome_1.innovation < genome_2.innovation else genome_2
-        different_genes_1_2 = set([cgene.innovation for cgene in genome_1.cgenome]) - \
-            set([cgene.innovation for cgene in genome_2.cgenome])
-        different_genes_2_1 = set([cgene.innovation for cgene in genome_2.cgenome]) - \
-            set([cgene.innovation for cgene in genome_1.cgenome])
-
-        all_different_genes = different_genes_1_2 | different_genes_2_1
-
-        for diffg in all_different_genes:
-
-            if diffg < less_innovative_genome.innovation:
-                D += 1
-            else:
-                E += 1
-
-        sum_weights = 0
-        number_of_matched_weights = 0
-        for _, value_1 in enumerate(genome_1.cgenome):
-            for _, value_2 in enumerate(genome_2.cgenome):
-                if value_1.innovation == value_2.innovation:
-                    number_of_matched_weights += 1
-                    sum_weights += abs(value_1.weight - value_2.weight)
-
-        W = sum_weights/number_of_matched_weights
-
-        d = (D*c1)/N + (E*c2)/N + W*c3
-        return d
+        return self.population
     
     def add_random_connection(self,genome):
         try_counter = 0 
@@ -205,20 +203,30 @@ class Evomixer:
         
         return genome
 
-    def mutate(self, mutate_rate=0.2):
+    def mutate(self,genome, mutate_rate=0.2):
 
-        for n,genome in enumerate(self.genomes):
+        # mutate - add connection
+        if mutate_rate > random.uniform(random.PRNGKey(0), shape=(1,)):
+            genome = self.add_random_connection(genome)
 
-            # mutate - add connection
-            if mutate_rate > random.uniform(random.PRNGKey(0), shape=(1,)):
-                self.genomes[n] = self.add_random_connection(genome)
+        if mutate_rate > random.uniform(random.PRNGKey(0), shape=(1,)):
+            genome = self.add_random_node(genome)
 
-            if mutate_rate > random.uniform(random.PRNGKey(0), shape=(1,)):
-                self.genomes[n] = self.add_random_node(genome)
+        if mutate_rate > random.uniform(random.PRNGKey(0), shape=(1,)):
+            genome = self.mutate_weight(genome)
+        # mutate - add node on existing connection
+        return genome
 
-            if mutate_rate > random.uniform(random.PRNGKey(0), shape=(1,)):
-                self.genomes[n] = self.mutate_weight(genome)
-            # mutate - add node on existing connection
+    def speciate(self):
+        pass
 
     def crossover(self):
         pass
+
+
+#### TODO:
+#
+# 1. Prepare test genomes for evolution
+# 2. Run evolution with speciation
+#
+#
