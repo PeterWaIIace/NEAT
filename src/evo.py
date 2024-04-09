@@ -26,23 +26,23 @@ class ConnectionGene:
         self.enabled = enabled
 
 
-def δ(self, genome_1, genome_2, c1=1.0, c2=1.0, c3=1.0, N=1.0):
+def δ( genome_1, genome_2, c1=1.0, c2=1.0, c3=1.0, N=1.0):
 
     D = 0  # disjoint genes
     E = 0  # excess genes
 
     # check which genome is shorter:
     less_innovative_genome = genome_1 if genome_1.innovation < genome_2.innovation else genome_2
-    different_genes_1_2 = set([cgene.innovation for cgene in genome_1.cgenome]) - \
-        set([cgene.innovation for cgene in genome_2.cgenome])
-    different_genes_2_1 = set([cgene.innovation for cgene in genome_2.cgenome]) - \
-        set([cgene.innovation for cgene in genome_1.cgenome])
+    different_genes_1_2 = set([cgene.innov for cgene in genome_1.cgenome]) - \
+        set([cgene.innov for cgene in genome_2.cgenome])
+    different_genes_2_1 = set([cgene.innov for cgene in genome_2.cgenome]) - \
+        set([cgene.innov for cgene in genome_1.cgenome])
 
     all_different_genes = different_genes_1_2 | different_genes_2_1
 
     for diffg in all_different_genes:
 
-        if diffg < less_innovative_genome.innovation:
+        if diffg < less_innovative_genome.innov:
             D += 1
         else:
             E += 1
@@ -51,7 +51,7 @@ def δ(self, genome_1, genome_2, c1=1.0, c2=1.0, c3=1.0, N=1.0):
     number_of_matched_weights = 0
     for _, value_1 in enumerate(genome_1.cgenome):
         for _, value_2 in enumerate(genome_2.cgenome):
-            if value_1.innovation == value_2.innovation:
+            if value_1.innov == value_2.innov:
                 number_of_matched_weights += 1
                 sum_weights += abs(value_1.weight - value_2.weight)
 
@@ -60,7 +60,7 @@ def δ(self, genome_1, genome_2, c1=1.0, c2=1.0, c3=1.0, N=1.0):
     d = (D*c1)/N + (E*c2)/N + W*c3
     return d
 
-def sh(self,δ,δ_t=0.2):
+def sh(δ,δ_t=0.2):
     return δ < δ_t
 
 class Genome:
@@ -154,8 +154,6 @@ class EvoManager:
     def __init__(self):
         self.innovation = 0
 
-    def get_population(self):
-        return self.population
     
     def add_random_connection(self,genome):
         try_counter = 0 
