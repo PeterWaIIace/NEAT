@@ -42,7 +42,7 @@ def δ( genome_1, genome_2, c1=1.0, c2=1.0, c3=1.0, N=1.0):
 
     for diffg in all_different_genes:
 
-        if diffg < less_innovative_genome.innov:
+        if diffg < less_innovative_genome.innovation:
             D += 1
         else:
             E += 1
@@ -145,16 +145,16 @@ class Genome:
 
     def get_possible_inputs(self):
         return [gene.index for gene in self.ngenome]
-           
+
     def get_possible_nodes(self):
         return [gene.index for gene in self.ngenome if gene.type is not NodeTypes.INPUT]
-    
+
 class EvoManager:
 
     def __init__(self):
         self.innovation = 0
 
-    
+
     def add_random_connection(self,genome):
         try_counter = 0 
         max_tries = 5
@@ -162,18 +162,20 @@ class EvoManager:
 
         genome.set_innovation(self.innovation)
         while not success and try_counter < max_tries:
-            min_val  = genome.ngenome[0].index 
-            max_val  = genome.ngenome[-1].index 
-            
-            rand_input_index = random.randint(random.PRNGKey(0), shape=(1,), minval = min_val, maxval = max_val)
-            rand_output_index = random.randint(random.PRNGKey(0), shape=(1,), minval = min_val, maxval = max_val)
-            
-            n_in  = genome.get_possible_inputs()[rand_input_index].index
-            n_out = genome.get_possible_outputs()[rand_output_index].index
+            min_val_in  = genome.ngenome[0].index
+            max_val_in  = genome.ngenome[-1].index
+            min_val_out  = 0
+            max_val_out  = len(genome.get_possible_nodes())
+
+            rand_input_index = random.randint(random.PRNGKey(0), shape=(1,), minval = min_val_in, maxval = max_val_in)[0]
+            rand_output_index = random.randint(random.PRNGKey(0), shape=(1,), minval = min_val_out, maxval = max_val_out)[0]
+
+            n_in  = genome.get_possible_inputs()[rand_input_index]
+            n_out = genome.get_possible_nodes()[rand_output_index]
 
             rand_weight = random.uniform(random.PRNGKey(0), shape=(1,))
             success = genome.add_connection(n_in,n_out,rand_weight)
-            
+
             try_counter += 1
 
         self.innovation = genome.get_innovation()
@@ -182,23 +184,23 @@ class EvoManager:
     def add_random_node(self,genome):
         min_val = genome.ngenome[0].index
         max_val = genome.ngenome[-1].index
-        rand_conn_index = random.randint(random.PRNGKey(0), shape=(1,), minval = min_val, maxval = max_val)
-        rand_weight = random.uniform(random.PRNGKey(0), shape=(1,))
+        rand_conn_index = random.randint(random.PRNGKey(0), shape=(1,), minval = min_val, maxval = max_val)[0]
+        rand_weight = random.uniform(random.PRNGKey(0), shape=(1,))[0]
 
         genome.set_innovation(self.innovation)
         genome.add_node(genome.cgenome[rand_conn_index],rand_weight)
         self.innovation = genome.get_innovation()
-        
+
         return genome
 
     def mutate_weight(self,genome):
         min_val = genome.ngenome[0].index
         max_val = genome.ngenome[-1].index
-        rand_conn_index = random.randint(random.PRNGKey(0), shape=(1,), minval = min_val, maxval = max_val)
-                 
-        rand_weight = random.uniform(random.PRNGKey(0), shape=(1,))
+        rand_conn_index = random.randint(random.PRNGKey(0), shape=(1,), minval = min_val, maxval = max_val)[0]
+   
+        rand_weight = random.uniform(random.PRNGKey(0), shape=(1,))[0]
         genome.cgenome[rand_conn_index].weight = rand_weight
-        
+
         return genome
 
     def mutate(self,genome, mutate_rate=0.2):
@@ -215,10 +217,30 @@ class EvoManager:
         # mutate - add node on existing connection
         return genome
 
-    def speciate(self):
-        pass
+    def speciate(self, population):
+        δ_th = 10
+        species = [[population[0]]]
+        
+        individual_1 = population[0]
+        for _,individual_2 in enumerate(population):
+            if individual_1 is not individual_2:
+                if δ(individual_1,individual_2) / δ_th < 1:
+                    species[len(species) - 1].append(individual_2)
 
-    def crossover(self):
+        for _,individual_1 in enumerate(population):
+
+            # if not in current species, create new specie
+            if sum([individual_1 in specie for specie in species]) == 0:
+                species.append([individual_1])
+                for _,individual_2 in enumerate(population):
+                    if individual_1 is not individual_2:
+                        if δ(individual_1,individual_2) / δ_th < 1:
+                            species[len(species) - 1].append(individual_2)
+
+        return species
+
+    def crossover(self,population):
+        
         pass
 
 
