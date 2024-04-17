@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from src.utils import NodeTypes
 from typing import List
 
+import jax.numpy as jnp
 from jax import random
 
 class NodeGene:
@@ -66,8 +67,6 @@ def sh(δ,δ_t=0.2):
 class Genome:
 
     def __init__(self):
-        self.innovation: int = 0
-
         self.ngenome = [
             NodeGene(NodeTypes.INPUT, 0),
             NodeGene(NodeTypes.INPUT, 1),
@@ -77,9 +76,11 @@ class Genome:
 
         self.cgenome = [
             ConnectionGene(0, 0, 0, 3, 1.0, 1),
-            ConnectionGene(1, 0, 1, 3, 1.0, 1),
-            ConnectionGene(2, 0, 2, 3, 1.0, 1)
+            ConnectionGene(1, 1, 1, 3, 1.0, 1),
+            ConnectionGene(2, 2, 2, 3, 1.0, 1)
         ]
+
+        self.innovation: int = 2
 
     def get_input_nodes(self):
         return [node for node in self.ngenome if node.type == NodeTypes.INPUT]
@@ -216,15 +217,20 @@ class EvoManager:
             genome = self.mutate_weight(genome)
         # mutate - add node on existing connection
         return genome
+    
+    def sh(self,individual_1,individual_2,δ_th):
+        """fitness sharing function"""
+        return (δ(individual_1,individual_2) / δ_th) < 1
 
-    def speciate(self, population):
+    def speciate(self, population) -> list:
+        """function for speciation"""
         δ_th = 10
         species = [[population[0]]]
-        
+
         individual_1 = population[0]
         for _,individual_2 in enumerate(population):
             if individual_1 is not individual_2:
-                if δ(individual_1,individual_2) / δ_th < 1:
+                if sh(δ(individual_1,individual_2),δ_th):
                     species[len(species) - 1].append(individual_2)
 
         for _,individual_1 in enumerate(population):
@@ -234,14 +240,37 @@ class EvoManager:
                 species.append([individual_1])
                 for _,individual_2 in enumerate(population):
                     if individual_1 is not individual_2:
-                        if δ(individual_1,individual_2) / δ_th < 1:
+                        if sh(δ(individual_1,individual_2),δ_th):
                             species[len(species) - 1].append(individual_2)
 
         return species
 
-    def crossover(self,population):
+    def __mate(superior : Genome, inferior : Genome):
+        key = random.PRNGKey(0)  # Initialize the random key
+        # Generate random booleans (0 or 1 integers) and convert them to boolean type
+        random_mating_vector_connection = random.randint(key, (len(superior.cgenome),), minval=0, maxval=2).astype(bool)
         
-        pass
+        for n,connections_s in enumerate(superior.cgenome):
+            if random_mating_vector_connection[n]:
+                for m,connections_i in enumerate(inferior.cgenome):
+                    if connections_s.innov == connections_i.innov:
+                        inferior.cgenome[m] = connections_s
+                        
+
+                    elif connections_i.innov > connections_s.innov:
+                        break 
+
+
+
+    def crossover(self,fitnesses,population):
+        # do I need to adjust that fitnesses
+        adjusted_fitnesses = jnp.array(fitnesses)/len(population)
+        
+        if len(population) == 1:
+            return population
+        elif len(population) == 2:
+
+    
 
 
 #### TODO:
