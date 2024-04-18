@@ -255,7 +255,9 @@ class EvoManager:
                 for m,connections_i in enumerate(inferior.cgenome):
                     if connections_s.innov == connections_i.innov:
                         inferior.cgenome[m] = connections_s
-                        
+                        if not connections_s.out_neuron in [ngenome.index for ngenome in inferior.ngenome]:
+                            inferior.ngenome(NodeGene(NodeTypes.Node, connections_s.out_neuron))
+                        inferior.ngenome[connections_s.out_neuron]
 
                     elif connections_i.innov > connections_s.innov:
                         break 

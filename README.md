@@ -11,4 +11,5 @@ python3 main.py
 python3 -m pytest tests/
 ```
 
+### Mating genes:
 ![alt text](image.png)
