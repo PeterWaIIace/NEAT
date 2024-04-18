@@ -271,13 +271,4 @@ class EvoManager:
         if len(population) == 1:
             return population
         elif len(population) == 2:
-
-    
-
-
-#### TODO:
-#
-# 1. Prepare test genomes for evolution
-# 2. Run evolution with speciation
-#
-#
+            pass
