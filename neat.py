@@ -27,6 +27,12 @@ class StatefulRandomGenerator:
         rnd_value = jrnd.randint(self.key, shape=(1,), minval=min, maxval=max)
         self.key = jrnd.split(self.key,1)[0]
         return rnd_value
+    
+    def uniform(self,max=1.0,min=0):
+        random_float = jrnd.uniform(self.key, shape=(1,), minval=min, maxval=max)
+        self.key = jrnd.split(self.key,1)[0]
+        return random_float
+        
 
 Rnd = StatefulRandomGenerator()
 
@@ -61,7 +67,8 @@ class Genome:
 
         self.node_gen = self.node_gen.at[index].set(jnp.array([index,type.value]))
 
-    def add_r_connections(self,innov):
+    def add_r_connection(self,innov):
+        innov+=1
         possible_input_nodes  = self.node_gen[self.node_gen[:,0] != 0 and self.node_gen[:,1] != NodeTypes.OUTPUT][:,0]
         possible_output_nodes = self.node_gen[self.node_gen[:,0] != 0 and self.node_gen[:,1] != NodeTypes.INPUT][:,0]
 
@@ -79,18 +86,27 @@ class Genome:
 
         new_node = self.index
 
+        innov+=1
         self.add_connection(innov,
                             self.con_gen.at[index_of_connection,self.i],
                             new_node,
                             self.con_gen.at[index_of_connection,self.w]
                         )
+        innov+=1
         self.add_connection(innov,
                             new_node,
                             self.con_gen.at[index_of_connection,self.o],
                             self.con_gen.at[index_of_connection,self.w]
                         )
+        
+        return innov
 
-
+    def change_weigth(self,weigth):
+        exisitng_connections = self.con_gen[self.con_gen[:,0] != 0]
+        existing_connection = exisitng_connections[Rnd.randint(max=len(exisitng_connections))]
+        index_of_connection = existing_connection[0] - 1
+        self.con_gen.at[index_of_connection].set(self.con_gen.at[index_of_connection,self.w].set(weigth))
+        
     def add_connection(self,innov,in_node,out_node,weight):
         ''' Adding connection '''
 
@@ -210,14 +226,21 @@ def cross_over(population,keep_top = 2):
             offspring = mate(sorted_specie[n],sorted_specie[m])
             new_population.append(offspring)
 
-def random_mutate(population):
+def random_mutate(population,innov = 0):
     for n,_ in enumerate(population):
 
         mutation_chance = random.randint(0,10)
         if mutation_chance  > 7:
-            population[n].add
+            innov = population[n].add_r_node(innov)
 
-    pass
+        mutation_chance = random.randint(0,10)
+        if mutation_chance  > 7:
+            innov = population[n].add_r_connection(innov)
+
+        mutation_chance = random.randint(0,10)
+        if mutation_chance  > 7:
+            innov = population[n].change_weigth(Rnd.uniform())
+    return innov
 
 if __name__=="__main__":
     superior = Genome()
