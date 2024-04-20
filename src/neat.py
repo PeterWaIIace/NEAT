@@ -21,7 +21,6 @@ import jax.numpy as jnp
 from src.utils import NodeTypes
 from src.evo import NodeGene, ConnectionGene
 
-
 def compiler(ngenomes : [NodeGene], cgenomes : [ConnectionGene]):
 
     neurons = []
@@ -40,7 +39,7 @@ def compiler(ngenomes : [NodeGene], cgenomes : [ConnectionGene]):
     ff = FeedForward()
     for neuron in neurons:
         ff.add_neuron(neuron)
-        
+
     ff.compile()
     return ff
 
@@ -156,23 +155,6 @@ class FeedForward:
             print(f"weigths: {l.weigths}")
             print(f"inputs:  {l.inputs}")
             print(f"outputs: {l.outputs}")
-
-
-class Neat:
-
-    def __init__(self):
-        pass
-
-
-class Network:
-
-    def __init__(self):
-        self.genome = []
-        pass
-
-    def evalueate(self,genome):
-        self.genom = genome
-
 
 if __name__=="__main__":
     #### TEST 1 ######

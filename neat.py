@@ -1,8 +1,9 @@
 ''' Fast neat '''
 
-import jax.numpy as jnp 
+import random
+import jax.numpy as jnp
 import jax.random as jrnd
-import random 
+
 from enum import Enum
 
 class NodeTypes(Enum):
@@ -22,12 +23,12 @@ class StatefulRandomGenerator:
         indecies = jrnd.permutation(self.key, val_range)[:rnd_value_int]
         self.key = jrnd.split(self.key,1)[0]
         return indecies
-    
+
     def randint(self,max=100,min=0):
         rnd_value = jrnd.randint(self.key, shape=(1,), minval=min, maxval=max)
         self.key = jrnd.split(self.key,1)[0]
         return rnd_value
-    
+
     def uniform(self,max=1.0,min=0):
         random_float = jrnd.uniform(self.key, shape=(1,), minval=min, maxval=max)
         self.key = jrnd.split(self.key,1)[0]
@@ -38,6 +39,11 @@ Rnd = StatefulRandomGenerator()
 
 class Genome:
 
+    i = 2
+    o = 3
+    w = 4
+    enabled = 5
+
     def __init__(self):
         self.connections_length = 20
         self.nodes_length = 20
@@ -45,10 +51,7 @@ class Genome:
         self.index = 0
         self.fitness = 1.0
         # helper indicies names
-        self.i = 2
-        self.o = 3
-        self.w = 4
-        self.enabled = 5
+
 
         # Connections genomes is array, rows are genomes, but cols are parameters of that genomes
         self.con_gen  = jnp.zeros((self.connections_length,6),)
@@ -242,6 +245,140 @@ def random_mutate(population,innov = 0):
             innov = population[n].change_weigth(Rnd.uniform())
     return innov
 
+def compiler(ngenomes, cgenomes):
+
+    neurons = []
+    for n in ngenomes[ngenomes[:,0] != 0.0]:
+        neurons.append(
+            Neuron(n)
+        )
+
+    for c in cgenomes[cgenomes[:,Genome.enabled] != 0.0]:
+        neurons[int(Genome.o)].add_input(
+            int(c[Genome.i]),
+            c[Genome.w],
+            neurons[int(c[Genome.i])].layer)
+
+    ff = FeedForward()
+    for neuron in neurons:
+        ff.add_neuron(neuron)
+
+    ff.compile()
+    return ff
+
+class Neuron:
+
+    def __init__(self,node_genome):
+        self.index = node_genome[0]
+        self.layer = 0
+        self.input_list = []
+        self.weights = []
+
+    def add_input(self,in_neuron,weigth,layer):
+        self.input_list.append(in_neuron)
+        self.weights.append(weigth)
+        if layer == self.layer:
+            self.layer+=1
+        if layer > self.layer:
+            self.layer = layer + 1
+
+    def getLayer(self):
+        return self.layer
+
+    def get(self):
+        return {self.layer : jnp.array(self.weights)}
+
+    def print(self):
+        print(
+        f"self.index:     {self.index}\
+          self.layer:     {self.layer}\
+          self.input_list {self.input_list}\
+          self.weights    {self.weights}"
+        )
+
+class Layer:
+
+    def __init__(self,index):
+        self.layer_index = index
+        self.neurons = []
+
+        self.weigths = None
+        self.inputs  = None
+        self.outputs = None
+
+        self.inputs_len  = 0
+        self.outputs_len = 0
+
+    def add_neuron(self,neuron):
+        self.outputs_len += 1
+        if len(neuron.input_list) > 0:
+            self.inputs_len = jnp.max(jnp.array(neuron.input_list))+1
+        self.neurons.append(neuron)
+        # neuron.
+
+    def compile(self):
+
+        self.weigths = jnp.zeros((self.outputs_len,self.inputs_len))
+        self.inputs  = jnp.zeros((self.inputs_len),dtype = jnp.int32)
+        self.outputs = jnp.zeros((self.outputs_len),dtype = jnp.int32)
+
+        filled_in_length = 0
+        for n_i,n in enumerate(self.neurons):
+            if len(self.inputs) > 0:
+                self.inputs = self.inputs.at[jnp.array(n.input_list)].set(jnp.array(n.input_list))
+                filled_in_length += len(n.input_list) 
+
+                self.outputs = self.outputs.at[n_i].set(n.index)
+
+                self.weigths = self.weigths.at[n_i,n.input_list].set(jnp.array(n.weights))            
+        # now layer is complied
+
+    def forward(self,input):
+        return jnp.dot(input[self.inputs],self.weigths.T)
+
+class FeedForward:
+
+    def __init__(self):
+        self.index = 0
+        self.size = 0
+        self.layers = [Layer(self.index)]
+
+    def add_neuron(self,neuron):
+        self.size += 1
+        layer_index = neuron.getLayer()
+
+        while layer_index >= len(self.layers):
+            print(len(self.layers), layer_index)
+            self.index += 1
+            self.layers.append(Layer(self.index))
+
+        self.layers[layer_index].add_neuron(neuron)
+
+    def compile(self):
+
+        for l in self.layers:
+            l.compile()
+
+    def activate(self,x):
+
+        output = jnp.zeros(self.size)
+        output = output.at[:len(x)].set(x)
+
+        for l in self.layers:
+            if l.layer_index > 0:
+                output = output.at[l.outputs].set(l.forward(output))
+
+        return output[self.layers[-1].outputs]
+
+    def print(self):
+
+        for l in self.layers:
+            print("====================================")
+            print(f"weigths: {l.weigths}")
+            print(f"inputs:  {l.inputs}")
+            print(f"outputs: {l.outputs}")
+
+
 if __name__=="__main__":
     superior = Genome()
     inferior = Genome()
@@ -272,8 +409,12 @@ if __name__=="__main__":
     inferior.add_connection(4,2,5,1.0)
     inferior.add_connection(5,4,5,1.0)
 
-    population = [superior, inferior]
-    print(speciate(population))
+    ff = compiler(superior.node_gen,superior.con_gen)
+
+
+
+    # population = [superior, inferior]
+    # print(speciate(population))
 
     # print(inferior.con_gen)
     # print(inferior.node_gen)
