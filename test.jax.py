@@ -1,8 +1,19 @@
-import numpy as np
 import jax.numpy as jnp
-import time
+from jax import vmap
 
-iterations = 20000
-array1 = jnp.array([[1,2], [2,5], [3,4], [4,1], [5,2]])
+# Define your function func(x, y)
+def func(x, i, y):
+    if y[i] == 0:
+        return x * y
+    else:
+        return x
 
-print(array1[array1[:,1] == 2])
+# Example arrays X and Y
+X = jnp.array([1.231, 2.32, 1.54])
+Y = jnp.array([0, 1, 1])
+indices = jnp.arange(X.shape[0])
+
+# Apply func to each corresponding pair of elements from X and Y
+result = vmap(func, (0, 0, None))(X, indices, Y)
+
+print(result)
