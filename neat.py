@@ -83,8 +83,10 @@ class Genome:
         ''' Assign new fitness to this genome '''
         self.fitness = fit
 
+    # TODO: there is problem with correct nodes
     def add_node(self,index : int, type : NodeTypes, bias : float, act : int):
         ''' Adding node '''
+        
         if self.nodes_length <= index:
             self.nodes_length += 20
             new_nodes_spaces = jnp.zeros((20,4),)
@@ -92,31 +94,37 @@ class Genome:
 
         self.node_gen = self.node_gen.at[index].set(jnp.array([index,type.value,bias,act]))
 
+    # TODO: here is another problem - sometimes it creates connection to nowhere
     def add_r_connection(self,innov):
-        possible_input_nodes  = self.node_gen[self.node_gen[:,0] != 0][self.node_gen[:,1] != NodeTypes.OUTPUT][:,0][0]
-        possible_output_nodes = self.node_gen[self.node_gen[:,0] != 0][self.node_gen[:,1] != NodeTypes.INPUT][:,0][0]
+        active_nodes = self.node_gen[self.node_gen[:,0] != 0]
+        possible_input_nodes  = active_nodes[active_nodes[:,1] != float(NodeTypes.OUTPUT.value)][:,0]
+        possible_output_nodes = active_nodes[active_nodes[:,1] != float(NodeTypes.INPUT.value)][:,0]
 
         in_node  = possible_input_nodes[Rnd.randint(max=len(possible_input_nodes))]
         out_node = possible_output_nodes[Rnd.randint(max=len(possible_output_nodes))]
+        print(f"random connection: {possible_input_nodes} {possible_output_nodes}")
+        print("in_node: ", in_node, " out_node: ", out_node)
         return self.add_connection(int(innov),int(in_node),int(out_node),1.0)
 
     def add_r_node(self,innov):
-        self.index += 1
         exisitng_connections = self.con_gen[self.con_gen[:,0] != 0]
 
         existing_connection = exisitng_connections[Rnd.randint(max=len(exisitng_connections))]
         index_of_connection = int(existing_connection[0]) - 1
         self.con_gen.at[index_of_connection,self.enabled].set(0.0)
 
-        new_node = self.index
+        new_node = self.node_gen[self.node_gen[:,0] != 0][-1,0] + 1
 
         innov+=1
+        print(f"new node: {new_node}")
+        print("in_node: ", int(self.con_gen[index_of_connection,self.i]), " out_node: ", new_node)
         self.add_connection(int(innov),
                             int(self.con_gen[index_of_connection,self.i]),
                             int(new_node),
                             self.con_gen[index_of_connection,self.w]
                         )
         innov+=1
+        print("in_node: ", int(new_node), " out_node: ", int(self.con_gen[index_of_connection,self.o]))
         self.add_connection(int(innov),
                             int(new_node),
                             int(self.con_gen[index_of_connection,self.o]),
@@ -366,6 +374,7 @@ class Neuron:
         )
 
 class Layer:
+    # TODO: distinguish between output layers and rest
 
     def __init__(self,index):
         self.layer_index = index
@@ -513,10 +522,11 @@ def run():
     for e in range(epochs):
         all_rewards = []
         my_neat.evolve()
-        print("my_neat.evaluate(): ",len(my_neat.evaluate()))
+        
         for n,network in enumerate(my_neat.evaluate()):
             observation, info = env.reset()
             total_reward = 0
+            network.print()
 
             for _ in range(100):
                 actions = network.activate(jnp.array(observation))
