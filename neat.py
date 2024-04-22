@@ -94,7 +94,6 @@ class Genome:
 
         self.node_gen = self.node_gen.at[index].set(jnp.array([index,type.value,bias,act]))
 
-    # TODO: here is another problem - sometimes it creates connection to nowhere
     def add_r_connection(self,innov):
         active_nodes = self.node_gen[self.node_gen[:,0] != 0]
         possible_input_nodes  = active_nodes[active_nodes[:,1] != float(NodeTypes.OUTPUT.value)][:,0]
@@ -102,8 +101,6 @@ class Genome:
 
         in_node  = possible_input_nodes[Rnd.randint(max=len(possible_input_nodes))]
         out_node = possible_output_nodes[Rnd.randint(max=len(possible_output_nodes))]
-        print(f"random connection: {possible_input_nodes} {possible_output_nodes}")
-        print("in_node: ", in_node, " out_node: ", out_node)
         return self.add_connection(int(innov),int(in_node),int(out_node),1.0)
 
     def add_r_node(self,innov):
@@ -116,15 +113,12 @@ class Genome:
         new_node = self.node_gen[self.node_gen[:,0] != 0][-1,0] + 1
 
         innov+=1
-        print(f"new node: {new_node}")
-        print("in_node: ", int(self.con_gen[index_of_connection,self.i]), " out_node: ", new_node)
         self.add_connection(int(innov),
                             int(self.con_gen[index_of_connection,self.i]),
                             int(new_node),
                             self.con_gen[index_of_connection,self.w]
                         )
         innov+=1
-        print("in_node: ", int(new_node), " out_node: ", int(self.con_gen[index_of_connection,self.o]))
         self.add_connection(int(innov),
                             int(new_node),
                             int(self.con_gen[index_of_connection,self.o]),
@@ -228,7 +222,7 @@ def speciate(population) -> list:
     δ_th = 10
     species = [[population[0]]]
 
-    for _,individual_2 in enumerate(population):
+    for k,individual_2 in enumerate(population):
         if population[0] is not individual_2:
             if sh(δ(population[0],individual_2),δ_th):
                 species[len(species) - 1].append(individual_2)
@@ -275,7 +269,7 @@ def cross_over(population,keep_top = 2):
         org_length = len(sorted_specie)
         sorted_specie = sorted_specie[:keep_top]
 
-        for keept in sorted_specie:
+        for keept in sorted_specie[:keep_top]:
             new_population.append(keept)
         
         for n in range(org_length-len(new_population)):
@@ -320,9 +314,10 @@ def evolve(population,innov):
     return (population, innov)
 
 def compiler(ngenomes, cgenomes):
-
+    # I need to make sure that all output neurons are at the same layer
     neurons = []
-    for n,node in enumerate(ngenomes[ngenomes[:,0] != 0.0]):
+    active_nodes = ngenomes[ngenomes[:,0] != 0.0]
+    for n,node in enumerate(active_nodes):
         neurons.append(
             Neuron(node)
         )
@@ -348,6 +343,7 @@ class Neuron:
     def __init__(self,node_genome):
         self.index = int(node_genome[0]) - 1
         self.layer = 0
+        self.type = int(node_genome[1])
         self.bias = node_genome[Genome.n_bias]
         self.act  = node_genome[Genome.n_act]
         self.input_list = []
@@ -427,18 +423,25 @@ class FeedForward:
         self.index = 0
         self.size = 0
         self.layers = [Layer(self.index)]
+        self.output_layer = Layer(999)
 
     def add_neuron(self,neuron):
         self.size += 1
-        layer_index = neuron.getLayer()
+        if neuron.type == NodeTypes.OUTPUT.value:
+            self.output_layer.add_neuron(neuron)
+        else:
+            layer_index = neuron.getLayer()
 
-        while layer_index >= len(self.layers):
-            self.index += 1
-            self.layers.append(Layer(self.index))
+            while layer_index >= len(self.layers):
+                self.index += 1
+                self.layers.append(Layer(self.index))
 
-        self.layers[layer_index].add_neuron(neuron)
+            self.layers[layer_index].add_neuron(neuron)
 
     def compile(self):
+        self.index += 1
+        self.output_layer.index = self.index
+        self.layers.append(self.output_layer)
 
         for l in self.layers:
             l.compile()
@@ -508,17 +511,19 @@ class NEAT:
     def update(self,fitness):
         ''' Function for updating fitness '''
         for n,_ in enumerate(self.population):
-            self.population[n].fitness = fitness
+            self.population[n].fitness = fitness[n]
 
 
 def run():
 
-    env = gym.make("Acrobot-v1", render_mode="human")
+    # env = gym.make("Acrobot-v1", render_mode="human")
+    env = gym.make("Acrobot-v1")
     my_neat = NEAT(6,3)
 
     observation, info = env.reset(seed=42)
 
     epochs = 10
+    prev_action = 0.0
     for e in range(epochs):
         all_rewards = []
         my_neat.evolve()
@@ -526,18 +531,21 @@ def run():
         for n,network in enumerate(my_neat.evaluate()):
             observation, info = env.reset()
             total_reward = 0
-            network.print()
 
-            for _ in range(100):
+            for _ in range(500):
                 actions = network.activate(jnp.array(observation))
                 action = actions.argmax()
-                print(f"action: {action}, {actions}")
+                #promote mobility
+                if prev_action != action:
+                    total_reward += abs(observation[4])/10000 + abs(observation[5])/10000
+                    prev_action = action
+            
                 observation, reward, terminated, truncated, info = env.step(action)
                 total_reward += reward
                 if terminated or truncated:
-                    all_rewards.append(total_reward)
                     break
 
+            all_rewards.append(total_reward)
             print(f"net: {n}, fitness: {total_reward}")
             
         my_neat.update(all_rewards)
