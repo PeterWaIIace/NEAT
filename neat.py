@@ -8,7 +8,6 @@ import jax.random as jrnd
 import gymnasium as gym
 
 from enum import Enum
-from functools import partial
 
 class NodeTypes(Enum):
     NODE   = 1
@@ -321,7 +320,6 @@ def compiler(ngenomes, cgenomes):
         neurons.append(
             Neuron(node)
         )
-
         # neurons[n].inputs  = cgenomes[cgenomes[:,Genome.o] == n][:,Genome.i]
         # neurons[n].weights = cgenomes[cgenomes[:,Genome.o] == n][:,Genome.i]
 

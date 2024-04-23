@@ -1,0 +1,2 @@
+# hostfile.txt
+localhost slots=5
