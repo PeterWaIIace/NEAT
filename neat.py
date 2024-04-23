@@ -2,6 +2,7 @@
 import jax
 import copy
 import time
+import pickle
 import random
 import jax.numpy as jnp
 import jax.random as jrnd
@@ -207,7 +208,7 @@ def δ(genome_1, genome_2, c1=1.0, c2=1.0, c3=1.0, N=1.0):
     W_2 = jnp.sum(genome_2.con_gen[:innovation_thresh,:][D_tmp == 0][genome_2.w])
     W_avg = jnp.subtract(W_1,W_2)/W_1.size
 
-    d = (c1 * E) / N + (c2 * D) / N + c3 * W_avg
+    d = abs((c1 * E) / N + (c2 * D) / N + c3 * W_avg)
     return d
 
 def sh(δ,δ_t = 0.2):
@@ -218,21 +219,20 @@ def sh(δ,δ_t = 0.2):
 def speciate(population) -> list:
     """function for speciation"""
 
-    δ_th = 10
+    δ_th = 5
     species = [[population[0]]]
 
-    for k,individual_2 in enumerate(population):
-        if population[0] is not individual_2:
+    for _,individual_2 in enumerate(population):
+        if individual_2 is not population[0]:
             if sh(δ(population[0],individual_2),δ_th):
                 species[len(species) - 1].append(individual_2)
 
-    for _,individual_1 in enumerate(population):
-
+    for i,individual_1 in enumerate(population):
         # if not in current species, create new specie
         if sum([individual_1 in specie for specie in species]) == 0:
             species.append([individual_1])
             for _,individual_2 in enumerate(population):
-                if individual_1 is not individual_2:
+                if sum([individual_2 in specie for specie in species]) == 0:
                     if sh(δ(individual_1,individual_2),δ_th):
                         species[len(species) - 1].append(individual_2)
 
@@ -265,19 +265,18 @@ def cross_over(population,keep_top = 2):
     
     for specie in species:
         sorted_specie = sorted(specie, key=lambda x: x.fitness, reverse=True)[:]
-        org_length = len(sorted_specie)
-        sorted_specie = sorted_specie[:keep_top]
+        top_species = sorted_specie[:keep_top]
 
-        for keept in sorted_specie[:keep_top]:
+        for keept in top_species:
             new_population.append(keept)
-        
-        for n in range(org_length-len(new_population)):
-            n = random.randint(0,len(sorted_specie)-1)
+
+        for n in range(len(sorted_specie) - keep_top):
+            n = random.randint(0,len(top_species)-1)
             m = n
             while m == n:
-                m = random.randint(0,len(sorted_specie)-1)
+                m = random.randint(0,len(top_species)-1)
 
-            offspring = mate(sorted_specie[n],sorted_specie[m])
+            offspring = mate(top_species[n],top_species[m])
             new_population.append(offspring)
 
     return new_population
@@ -324,6 +323,7 @@ def compiler(ngenomes, cgenomes):
         # neurons[n].weights = cgenomes[cgenomes[:,Genome.o] == n][:,Genome.i]
 
     for c in cgenomes[cgenomes[:,Genome.enabled] != 0.0]:
+        print(f"neurons len: {len(neurons)}, index: {int(c[Genome.o])-1}")
         neurons[int(c[Genome.o])-1].add_input(
             int(c[Genome.i])-1,
             c[Genome.w],
@@ -392,7 +392,7 @@ class Layer:
 
     def compile(self):
 
-        self.weigths = jnp.zeros((self.outputs_len,self.inputs_len))
+        self.weigths = jnp.zeros((self.outputs_len,self.inputs_len),dtype = jnp.float32)
         self.inputs  = jnp.zeros((self.inputs_len),dtype = jnp.int32)
         self.outputs = jnp.zeros((self.outputs_len),dtype = jnp.int32)
         self.acts   = jnp.zeros((self.outputs_len),dtype = jnp.int32)
@@ -466,12 +466,12 @@ class FeedForward:
 
 class NEAT:
 
-    def __init__(self,inputs=2, outputs=1 ):
+    def __init__(self,inputs=2, outputs=1, population_size = 10 ):
         self.innov = 0
         self.index = 1
         self.inputs = inputs
         self.outputs = outputs
-        self.population_size = 10
+        self.population_size = population_size
         self.population = []
         self.__population_maker()
 
@@ -515,29 +515,35 @@ class NEAT:
 def run():
 
     # env = gym.make("Acrobot-v1", render_mode="human")
-    env = gym.make("Acrobot-v1")
-    my_neat = NEAT(6,3)
+    # env = gym.make("Acrobot-v1")
+    my_neat = NEAT(6,3, 20)
 
-    observation, info = env.reset(seed=42)
 
-    epochs = 10
+    epochs = 50
     prev_action = 0.0
+    experiment_length = 100
+    models_path = "models"
+    game = "Acrobot-v1"
     for e in range(epochs):
+        print(f"================ EPOCH: {e} ================")
+        env = gym.make(game)
+        observation, info = env.reset(seed=42)
         all_rewards = []
         my_neat.evolve()
-        
-        for n,network in enumerate(my_neat.evaluate()):
+
+        networks = my_neat.evaluate()
+        for n,network in enumerate(networks):
             observation, info = env.reset()
             total_reward = 0
 
-            for _ in range(500):
+            for _ in range(experiment_length):
                 actions = network.activate(jnp.array(observation))
                 action = actions.argmax()
                 #promote mobility
                 if prev_action != action:
                     total_reward += abs(observation[4])/10000 + abs(observation[5])/10000
                     prev_action = action
-            
+
                 observation, reward, terminated, truncated, info = env.step(action)
                 total_reward += reward
                 if terminated or truncated:
@@ -545,15 +551,36 @@ def run():
 
             all_rewards.append(total_reward)
             print(f"net: {n}, fitness: {total_reward}")
-            
-        my_neat.update(all_rewards)
-                    
+
+        index = all_rewards.index(max(all_rewards))
+        #display the best:
+        network = networks[index]
+        env = gym.make(game, render_mode="human")
         
+        print(f"Displaying the best: {index}, max reward: {max(all_rewards)}")
+        observation, info = env.reset()
+        total_reward = 0
+
+        for _ in range(experiment_length):
+            actions = network.activate(jnp.array(observation))
+            action = actions.argmax()
+            #promote mobility
+            if prev_action != action:
+                total_reward += abs(observation[4])/10000 + abs(observation[5])/10000
+                prev_action = action
+
+            observation, reward, terminated, truncated, info = env.step(action)
+            total_reward += reward
+            if terminated or truncated:
+                break
+
+        pickle.dump(network,open(f"{models_path}/{game}_e{e}.neatpy","wb"))
+        my_neat.update(all_rewards)
+
     env.close()
 
 if __name__=="__main__":
     run()
-    pass
 
     # population = [superior, inferior]
     # print(speciate(population))
