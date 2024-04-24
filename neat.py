@@ -4,16 +4,17 @@ import copy
 import time
 import pickle
 import random
+import networkx as nx 
+import gymnasium as gym
 import jax.numpy as jnp
 import jax.random as jrnd
-import gymnasium as gym
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 
 from enum import Enum
 
 # First networkx library is imported  
 # along with matplotlib 
-import networkx as nx 
-import matplotlib.pyplot as plt    
 
 class NodeTypes(Enum):
     NODE   = 1
@@ -46,10 +47,16 @@ class StatefulRandomGenerator:
 
 Rnd = StatefulRandomGenerator()
 
-NUMBER_OF_ACTIATION_FUNCTIONS = 1
-# def sigmoid(x):
-#     """Sigmoid activation function"""
-#     
+NUMBER_OF_ACTIATION_FUNCTIONS = 6
+
+act2name = {
+    0 : "x",
+    1 : "sigmoid",
+    2 : "ReLU",
+    3 : "LeakyReLU",
+    4 : "Softplus",
+    5 : "tanh",
+}
 
 def __x(x):
     return x
@@ -57,9 +64,22 @@ def __x(x):
 def sigmoid(x):
     return 1 / (1 + jnp.exp(-x))
 
-def activation_func(x,y):
+def ReLU(x):
+    return x * (x > 0)
 
-    return jax.lax.cond(y == 0, lambda x : x, lambda x : sigmoid(x),(x))  # Handle other cases (NaN for example)
+def LeakyReLU(x):
+    α = 0.01
+    return x * (x > 0) + α * x * (x <= 0)
+
+def Softplus(x):
+    return jnp.log(1 + jnp.exp(x))
+
+def tanh(x):
+    return jnp.tanh(x)
+
+def activation_func(x,y):
+    ''' branchless and vectorized activation functions'''
+    return x * (y == 0) + sigmoid(x) * (y == 1) + ReLU(x) * (y == 2) + LeakyReLU(x) * (y == 3) + Softplus(x) * (y == 4) + tanh(x) * (y == 5)
 class Genome:
 
     i = 2
@@ -67,6 +87,7 @@ class Genome:
     w = 4
     enabled = 5
 
+    n_index = 0
     n_bias = 2
     n_act  = 3
 
@@ -88,68 +109,82 @@ class Genome:
     # TODO: there is problem with correct nodes
     def add_node(self,index : int, type : NodeTypes, bias : float, act : int):
         ''' Adding node '''
-        
+        print(f"adding node index: {index}")
+
         if self.nodes_length <= index:
             self.nodes_length += 20
             new_nodes_spaces = jnp.zeros((20,4),)
             self.node_gen = jnp.concatenate((self.node_gen,new_nodes_spaces), axis=0)
 
-        self.node_gen = self.node_gen.at[index].set(jnp.array([index,type.value,bias,act]))
+        self.node_gen = self.node_gen.at[index].set(jnp.array([index + 1,type.value,bias,act]))
 
     def add_r_connection(self,innov):
         active_nodes = self.node_gen[self.node_gen[:,0] != 0]
         possible_input_nodes  = active_nodes[active_nodes[:,1] != float(NodeTypes.OUTPUT.value)][:,0]
         possible_output_nodes = active_nodes[active_nodes[:,1] != float(NodeTypes.INPUT.value)][:,0]
 
+        print(f"[add_r_connection]: {possible_input_nodes} {possible_output_nodes}")
         in_node  = possible_input_nodes[Rnd.randint(max=len(possible_input_nodes))]
         out_node = possible_output_nodes[Rnd.randint(max=len(possible_output_nodes))]
-        return self.add_connection(int(innov),int(in_node),int(out_node),1.0)
+        while in_node == out_node:
+            out_node = possible_output_nodes[Rnd.randint(max=len(possible_output_nodes))]
+        print(f"in_node : {in_node},out_node : {out_node}")
+        return self.add_connection(int(innov),int(in_node)-1,int(out_node)-1,1.0)
 
     def add_r_node(self,innov):
+        innov = int(innov)
         exisitng_connections = self.con_gen[self.con_gen[:,0] != 0]
 
-        existing_connection = exisitng_connections[Rnd.randint(max=len(exisitng_connections))]
-        index_of_connection = int(existing_connection[0]) - 1
-        self.con_gen.at[index_of_connection,self.enabled].set(0.0)
+        print(f"[add_r_node] exisitng_connections: {exisitng_connections}, len={len(exisitng_connections)}")
+        index_of_connection = Rnd.randint(max=len(exisitng_connections)-1)
+        self.con_gen = self.con_gen.at[index_of_connection,self.enabled].set(0.0)
 
-        new_node = self.node_gen[self.node_gen[:,0] != 0][-1,0] + 1
+        new_node = self.node_gen[self.node_gen[:,self.n_index] != 0][-1,self.n_index] + 1
 
         innov+=1
-        self.add_connection(int(innov),
-                            int(self.con_gen[index_of_connection,self.i]),
-                            int(new_node),
+        print(f"[add_r_node] chosen connection: {self.con_gen[index_of_connection]}, {index_of_connection}")
+        in_node = int(self.con_gen[index_of_connection,self.i])
+        out_node = int(new_node)
+
+        print(f"[add_r_node] in_node : {in_node-1},out_node : {out_node-1}")
+        self.add_connection(innov,
+                            in_node-1,
+                            out_node-1,
                             self.con_gen[index_of_connection,self.w]
                         )
+        
         innov+=1
-        self.add_connection(int(innov),
-                            int(new_node),
-                            int(self.con_gen[index_of_connection,self.o]),
+        in_node = int(new_node)
+        out_node = int(self.con_gen[index_of_connection,self.o])
+        self.add_connection(innov,
+                            in_node-1,
+                            out_node-1,
                             self.con_gen[index_of_connection,self.w]
                         )
-       
+        print(f"[add_r_node] in_node : {in_node-1},out_node : {out_node-1}")
+
         return innov
 
     def change_weigth(self,weigth):
         exisitng_connections = self.con_gen[self.con_gen[:,0] != 0]
-        existing_connection = exisitng_connections[Rnd.randint(max=len(exisitng_connections))]
-        index_of_connection = int(existing_connection[0]) - 1
-        self.con_gen.at[index_of_connection,self.w].set(weigth)
+        index_of_connection = Rnd.randint(max=len(exisitng_connections))
+        self.con_gen = self.con_gen.at[index_of_connection,self.w].set(weigth)
 
     def change_bias(self,bias):
         existing_nodes = self.node_gen[self.node_gen[:,0] != 0]
-        existing_node = existing_nodes[Rnd.randint(max=len(existing_nodes))]
-        node_index = int(existing_node[0]) - 1
-        self.con_gen.at[node_index,self.n_bias].set(bias)
+        node_index = Rnd.randint(max=len(existing_nodes))
+        self.node_gen = self.node_gen.at[node_index,self.n_bias].set(bias)
 
     def change_activation(self,act):
         existing_nodes = self.node_gen[self.node_gen[:,0] != 0]
-        existing_node = existing_nodes[Rnd.randint(max=len(existing_nodes))]
-        node_index = int(existing_node[0]) - 1
-        self.con_gen.at[int(node_index),self.n_act].set(act)
+        node_index = Rnd.randint(max=len(existing_nodes))
+        print(f"[change_activation] mutating activation for {node_index} to {act}")
+        print(f"[change_activation] {self.node_gen[int(node_index)]}")
+        print(f"[change_activation] {self.node_gen.at[int(node_index),self.n_act].set(act)[int(node_index)]}")
+        self.node_gen = self.node_gen.at[int(node_index),self.n_act].set(act)
 
     def add_connection(self,innov : int,in_node : int, out_node : int, weight : float):
         ''' Adding connection '''
-
         # update innovation if is bigger than current innov of genome
         if self.max_innov < innov:
             self.max_innov = innov
@@ -160,12 +195,12 @@ class Genome:
             self.con_gen = jnp.concatenate((self.con_gen,new_connections_spaces), axis=0)
 
         if self.node_gen[int(in_node)][0] == 0:
-            self.add_node(in_node,NodeTypes.NODE,0.0,1)
+            self.add_node(in_node,NodeTypes.NODE,0.0,0)
 
         if self.node_gen[int(out_node)][0] == 0:
-            self.add_node(out_node,NodeTypes.NODE,0.0,1)
+            self.add_node(out_node,NodeTypes.NODE,0.0,0)
 
-        self.con_gen = self.con_gen.at[innov].set(jnp.array([innov,innov,in_node,out_node,weight,1.0]))
+        self.con_gen = self.con_gen.at[innov].set(jnp.array([innov,innov,in_node+1,out_node+1,weight,1.0]))
         return innov
 
 # assuming that population is class having con_gens of size N_POPULATION x CREATURE_GENES x All information
@@ -423,6 +458,7 @@ class FeedForward:
         self.size = 0
         self.layers = [Layer(self.index)]
         self.output_layer = Layer(999)
+        self.graph = nx.DiGraph()
 
     def add_neuron(self,neuron):
         self.size += 1
@@ -464,6 +500,69 @@ class FeedForward:
             print(f"inputs:  {l.inputs}")
             print(f"outputs: {l.outputs}")
 
+    def __add_edge_to_graph(self,n1,n2,label,thickness):
+        # if n1 in self.graph.nodes() and n2 in self.graph.nodes():
+        self.graph.add_edge(n1,n2,label=label,thickness=thickness)
+
+    def __add_node_to_graph(self,node,x,max_layer = 10):
+
+        salmon_color = mcolors.to_rgba("salmon", alpha=0.5)
+        lightgreen_color = mcolors.to_rgba("lightgreen", alpha=0.5)
+        skyblue_color = mcolors.to_rgba("skyblue", alpha=0.5)
+
+        if node.type == NodeTypes.INPUT.value:
+            self.graph.add_node(node.index,
+                                color=salmon_color,
+                                label=f"{act2name[int(node.act)]}\nbias: {node.bias:.2f}\nnode: {node.index}")
+            nx.set_node_attributes(self.graph, {node.index: (x,0)}, "pos")
+        if node.type == NodeTypes.OUTPUT.value:
+            self.graph.add_node(node.index,
+                                color=lightgreen_color,
+                                label=f"{act2name[int(node.act)]}\nbias: {node.bias:.2f}\nnode: {node.index}")
+            nx.set_node_attributes(self.graph, {node.index: (x,max_layer+1)}, "pos")
+        if node.type == NodeTypes.NODE.value:
+            self.graph.add_node(node.index,
+                                color=skyblue_color,
+                                label=f"{act2name[int(node.act)]}\nbias: {node.bias:.2f}\nnode: {node.index}")
+            x += (node.layer)/10
+            nx.set_node_attributes(self.graph, {node.index: (x, node.layer)}, "pos")
+
+    def visualize(self,name):
+        ''' Visualize graph of current network '''
+        for l_n,l in enumerate(self.layers):
+            for x,neuron in enumerate(l.neurons):
+                # print(f"displaying node: {neuron.index}")
+                self.__add_node_to_graph(neuron,x,max_layer = len(self.layers))
+            
+            for neuron in l.neurons:
+                for n_inputs,w in zip(neuron.input_list,neuron.weights):
+                    # print(f"displaying connection: {n_inputs} {neuron.index}")
+                    self.__add_edge_to_graph(n_inputs, neuron.index, label=f'{w:.2f}',thickness=abs(w))
+
+        # Get weakly connected components
+        components = list(nx.weakly_connected_components(self.graph))
+
+        # Find the largest weakly connected component
+        largest_component = max(components, key=len)
+
+        # Create a subgraph with only the largest weakly connected component
+        largest_subgraph = self.graph.subgraph(largest_component)
+
+        # Filter out isolated nodes
+        isolated_nodes = [node for node in largest_subgraph.nodes() if largest_subgraph.degree(node) == 0]
+        self.graph.remove_nodes_from(isolated_nodes)
+
+        # Draw the graph with node colors and labels
+        print([self.graph.nodes[node] for node in self.graph.nodes()])
+        pos = {node: self.graph.nodes[node]["pos"] for node in self.graph.nodes()}  # Only set y-coordinate
+        node_colors = [self.graph.nodes[node]["color"] for node in self.graph.nodes()]
+        node_labels = {node: self.graph.nodes[node]["label"] for node in self.graph.nodes()}
+        edge_thickness = [nx.get_edge_attributes(self.graph, 'thickness')[edge] for edge in self.graph.edges()]
+        plt.clf()
+        nx.draw(self.graph, pos, with_labels=True, node_color=node_colors, labels=node_labels, node_size=1500, font_size=10, width = edge_thickness)  # Draw nodes
+        plt.savefig(f"models/{name}.png")
+        self.graph.clear()
+        # plt.show()
 
 class NEAT:
 
@@ -474,6 +573,7 @@ class NEAT:
         self.outputs = outputs
         self.population_size = population_size
         self.population = []
+
         self.__population_maker()
 
     def __population_maker(self):
@@ -491,7 +591,7 @@ class NEAT:
                 self.population[n].add_node(index,NodeTypes.OUTPUT,Rnd.uniform(min=-1.0,max=1.0),Rnd.randint(max=1))
                 index += 1
 
-            creation_innov = 0  
+            creation_innov = 0
             for i in range(self.inputs):
                 for o in range(self.outputs):
                     creation_innov += 1
@@ -511,44 +611,6 @@ class NEAT:
         ''' Function for updating fitness '''
         for n,_ in enumerate(self.population):
             self.population[n].fitness = fitness[n]
-    
-    def __add_edge_to_graph():
-        pass
-
-    def __add_node_to_graph():
-        pass
-
-    def visualize(self):
-        pass
-
-
-  
-# Defining a Class 
-class NetVisualization: 
-   
-    def __init__(self):  
-        # visual is a list which stores all  
-        # the set of edges that constitutes a 
-        # graph 
-        self.visual = [] 
-          
-    # addEdge function inputs the vertices of an 
-    # edge and appends it to the visual list 
-    def addEdge(self, a, b): 
-        temp = [a, b] 
-        self.visual.append(temp) 
-          
-    # In visualize function G is an object of 
-    # class Graph given by networkx G.add_edges_from(visual) 
-    # creates a graph with a given list 
-    # nx.draw_networkx(G) - plots the graph 
-    # plt.show() - displays the graph 
-    def visualize(self): 
-        G = nx.Graph() 
-        G.add_edges_from(self.visual) 
-        nx.draw_networkx(G) 
-        plt.show() 
-  
 
 # def run():
 #     # env = gym.make("Acrobot-v1", render_mode="human")

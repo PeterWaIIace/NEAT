@@ -2,23 +2,25 @@
 import gym
 import slimevolleygym
 from neat import NEAT
+import jax.numpy as jnp
+import pickle 
 
 def run():
 
     # env = gym.make("Acrobot-v1", render_mode="human")
     # env = gym.make("Acrobot-v1")
-    my_neat = NEAT(12,3, 20)
+    my_neat = NEAT(6,3,20)
 
 
     epochs = 50
     prev_action = 0.0
     experiment_length = 100
     models_path = "models"
-    game = "SlimeVolley-v0"
+    game = "Acrobot-v1"
     for e in range(epochs):
         print(f"================ EPOCH: {e} ================")
-        env = gym.make(game,apply_api_compatibility=True)
-        observation, info = env.reset(seed=42)
+        env = gym.make(game)
+        observation, info = env.reset()
         all_rewards = []
         my_neat.evolve()
 
@@ -66,7 +68,8 @@ def run():
             total_reward += reward
             if terminated or truncated:
                 break
-
+        
+        network.visualize(f"{game}_e{e}")
         pickle.dump(network,open(f"{models_path}/{game}_e{e}.neatpy","wb"))
         my_neat.update(all_rewards)
 
