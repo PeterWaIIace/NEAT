@@ -10,6 +10,11 @@ import gymnasium as gym
 
 from enum import Enum
 
+# First networkx library is imported  
+# along with matplotlib 
+import networkx as nx 
+import matplotlib.pyplot as plt    
+
 class NodeTypes(Enum):
     NODE   = 1
     INPUT  = 2
@@ -55,9 +60,6 @@ def sigmoid(x):
 def activation_func(x,y):
 
     return jax.lax.cond(y == 0, lambda x : x, lambda x : sigmoid(x),(x))  # Handle other cases (NaN for example)
-
-
-
 class Genome:
 
     i = 2
@@ -323,7 +325,6 @@ def compiler(ngenomes, cgenomes):
         # neurons[n].weights = cgenomes[cgenomes[:,Genome.o] == n][:,Genome.i]
 
     for c in cgenomes[cgenomes[:,Genome.enabled] != 0.0]:
-        print(f"neurons len: {len(neurons)}, index: {int(c[Genome.o])-1}")
         neurons[int(c[Genome.o])-1].add_input(
             int(c[Genome.i])-1,
             c[Genome.w],
@@ -510,77 +511,114 @@ class NEAT:
         ''' Function for updating fitness '''
         for n,_ in enumerate(self.population):
             self.population[n].fitness = fitness[n]
+    
+    def __add_edge_to_graph():
+        pass
+
+    def __add_node_to_graph():
+        pass
+
+    def visualize(self):
+        pass
 
 
-def run():
+  
+# Defining a Class 
+class NetVisualization: 
+   
+    def __init__(self):  
+        # visual is a list which stores all  
+        # the set of edges that constitutes a 
+        # graph 
+        self.visual = [] 
+          
+    # addEdge function inputs the vertices of an 
+    # edge and appends it to the visual list 
+    def addEdge(self, a, b): 
+        temp = [a, b] 
+        self.visual.append(temp) 
+          
+    # In visualize function G is an object of 
+    # class Graph given by networkx G.add_edges_from(visual) 
+    # creates a graph with a given list 
+    # nx.draw_networkx(G) - plots the graph 
+    # plt.show() - displays the graph 
+    def visualize(self): 
+        G = nx.Graph() 
+        G.add_edges_from(self.visual) 
+        nx.draw_networkx(G) 
+        plt.show() 
+  
 
-    # env = gym.make("Acrobot-v1", render_mode="human")
-    # env = gym.make("Acrobot-v1")
-    my_neat = NEAT(6,3, 20)
+# def run():
+#     # env = gym.make("Acrobot-v1", render_mode="human")
+#     # env = gym.make("Acrobot-v1")
+#     my_neat = NEAT(6,3, 20)
 
+#     epochs = 50
+#     prev_action = 0.0
+#     experiment_length = 100
+#     models_path = "models"
+#     game = "SlimeVolley-v0"
+#     for e in range(epochs):
+#         print(f"================ EPOCH: {e} ================")
+#         env = gym.make(game)
+#         observation, info = env.reset(seed=42)
+#         all_rewards = []
+#         my_neat.evolve()
 
-    epochs = 50
-    prev_action = 0.0
-    experiment_length = 100
-    models_path = "models"
-    game = "Acrobot-v1"
-    for e in range(epochs):
-        print(f"================ EPOCH: {e} ================")
-        env = gym.make(game)
-        observation, info = env.reset(seed=42)
-        all_rewards = []
-        my_neat.evolve()
+#         networks = my_neat.evaluate()
+#         for n,network in enumerate(networks):
+#             observation, info = env.reset()
+#             total_reward = 0
 
-        networks = my_neat.evaluate()
-        for n,network in enumerate(networks):
-            observation, info = env.reset()
-            total_reward = 0
+#             for _ in range(experiment_length):
+#                 actions = network.activate(jnp.array(observation))
+#                 action = actions.argmax()
+#                 #promote mobility
+#                 if prev_action != action:
+#                     total_reward += abs(observation[4])/10000 + abs(observation[5])/10000
+#                     prev_action = action
 
-            for _ in range(experiment_length):
-                actions = network.activate(jnp.array(observation))
-                action = actions.argmax()
-                #promote mobility
-                if prev_action != action:
-                    total_reward += abs(observation[4])/10000 + abs(observation[5])/10000
-                    prev_action = action
+#                 observation, reward, terminated, truncated, info = env.step(action)
+#                 total_reward += reward
+#                 if terminated or truncated:
+#                     break
 
-                observation, reward, terminated, truncated, info = env.step(action)
-                total_reward += reward
-                if terminated or truncated:
-                    break
+#             all_rewards.append(total_reward)
+#             print(f"net: {n}, fitness: {total_reward}")
 
-            all_rewards.append(total_reward)
-            print(f"net: {n}, fitness: {total_reward}")
+#         env.close()
 
-        index = all_rewards.index(max(all_rewards))
-        #display the best:
-        network = networks[index]
-        env = gym.make(game, render_mode="human")
-        
-        print(f"Displaying the best: {index}, max reward: {max(all_rewards)}")
-        observation, info = env.reset()
-        total_reward = 0
+#         #display the best:
+#         index = all_rewards.index(max(all_rewards))
+#         network = networks[index]
+#         env = gym.make(game, render_mode="human")
 
-        for _ in range(experiment_length):
-            actions = network.activate(jnp.array(observation))
-            action = actions.argmax()
-            #promote mobility
-            if prev_action != action:
-                total_reward += abs(observation[4])/10000 + abs(observation[5])/10000
-                prev_action = action
+#         print(f"Displaying the best: {index}, max reward: {max(all_rewards)}")
+#         observation, info = env.reset()
+#         total_reward = 0
 
-            observation, reward, terminated, truncated, info = env.step(action)
-            total_reward += reward
-            if terminated or truncated:
-                break
+#         for _ in range(experiment_length):
+#             actions = network.activate(jnp.array(observation))
+#             action = actions.argmax()
+#             #promote mobility
+#             if prev_action != action:
+#                 total_reward += abs(observation[4])/10000 + abs(observation[5])/10000
+#                 prev_action = action
 
-        pickle.dump(network,open(f"{models_path}/{game}_e{e}.neatpy","wb"))
-        my_neat.update(all_rewards)
+#             observation, reward, terminated, truncated, info = env.step(action)
+#             total_reward += reward
+#             if terminated or truncated:
+#                 break
 
-    env.close()
+#         pickle.dump(network,open(f"{models_path}/{game}_e{e}.neatpy","wb"))
+#         my_neat.update(all_rewards)
 
-if __name__=="__main__":
-    run()
+#         env.close()
+
+# if __name__=="__main__":
+#     run()
 
     # population = [superior, inferior]
     # print(speciate(population))

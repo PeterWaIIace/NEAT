@@ -1,14 +1,9 @@
-from mpi4py import MPI
+import networkx as nx
+G = nx.Graph()
 
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-print(rank)
-
-if rank == 0:
-    data = {'a': 7, 'b': 3.14}
-    print(f"sent: {data}")
-    for i in range(1,comm.Get_size()):
-        comm.send(data, dest=i, tag=11)
-else:
-    data = comm.recv(source=0, tag=11)
-    print(f"received: {data}")
+G.add_edges_from([(1, 2), (1, 3)])
+G.add_node(1)
+G.add_edge(1, 2)
+G.add_node("spam")        # adds node "spam"
+G.add_nodes_from("spam")  # adds 4 nodes: 's', 'p', 'a', 'm'
+G.add_edge(3, 'm')
