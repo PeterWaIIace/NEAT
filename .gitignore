@@ -1,2 +1,3 @@
 neat_venv/*
 *.pyc
+*.models
