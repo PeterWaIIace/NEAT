@@ -24,7 +24,7 @@ class NodeTypes(Enum):
 class StatefulRandomGenerator:
 
     def __init__(self):
-        self.key = jrnd.PRNGKey(0)
+        self.key = jrnd.PRNGKey(int(time.time()))
 
     def randint_permutations(self,val_range):
         ''' generate subarray of permutation array from defined values range '''
@@ -108,6 +108,14 @@ class Genome:
         self.con_gen  = jnp.zeros((self.connections_length,6),)
         self.node_gen = jnp.zeros((self.nodes_length,4),)
 
+    def load_genomes(self, con_gen, node_gen):
+        ''' load genome by passing connection genome and node genome '''
+        self.con_gen  = con_gen
+        self.node_gen = node_gen
+        self.max_innov = self.con_gen[self.con_gen[:,0] != 0][-1,0]
+        self.connections_length = len(self.con_gen[self.con_gen[:,0] != 0])
+        self.nodes_length = len(self.node_gen[self.node_gen[:,0] != 0])
+
     def new_fitness(self,fit : float):
         ''' Assign new fitness to this genome '''
         self.fitness = fit
@@ -115,13 +123,12 @@ class Genome:
     # TODO: there is problem with correct nodes
     def add_node(self,index : int, type : NodeTypes, bias : float, act : int):
         ''' Adding node '''
-
         if self.nodes_length <= index:
             self.nodes_length += 20
             new_nodes_spaces = jnp.zeros((20,4),)
             self.node_gen = jnp.concatenate((self.node_gen,new_nodes_spaces), axis=0)
 
-        self.node_gen = self.node_gen.at[index].set(jnp.array([index + 1,type.value,bias,act]))
+        self.node_gen = self.node_gen.at[index].set(jnp.array([index+1,type.value,bias,act]))
 
     def add_r_connection(self,innov):
         active_nodes = self.node_gen[self.node_gen[:,0] != 0]
@@ -141,27 +148,50 @@ class Genome:
         index_of_connection = Rnd.randint(max=len(exisitng_connections)-1)
         self.con_gen = self.con_gen.at[index_of_connection,self.enabled].set(0.0)
 
-        new_node = self.node_gen[self.node_gen[:,self.n_index] != 0][-1,self.n_index] + 1
+        new_node = len(self.node_gen[self.node_gen[:,self.n_index] != 0]) + 1
 
-        innov+=1
         in_node = int(self.con_gen[index_of_connection,self.i])
         out_node = int(new_node)
 
-        self.add_connection(innov,
+        innov = self.add_connection(innov,
                             in_node-1,
                             out_node-1,
                             self.con_gen[index_of_connection,self.w]
                         )
         
-        innov+=1
         in_node = int(new_node)
         out_node = int(self.con_gen[index_of_connection,self.o])
-        self.add_connection(innov,
+        innov = self.add_connection(innov,
                             in_node-1,
                             out_node-1,
                             self.con_gen[index_of_connection,self.w]
                         )
+        return innov
 
+    def add_connection(self,innov : int,in_node : int, out_node : int, weight : float):
+        ''' Adding connection '''
+        # update innovation if is bigger than current innov of genome
+        for connections in self.con_gen[self.con_gen[:,0] != 0]:
+            if out_node+1 == connections[self.i] and in_node+1 == connections[self.o]:
+                return innov
+
+        ## after this point we need to add new connection, before it we can reject it 
+        innov+=1
+        if self.max_innov < innov:
+            self.max_innov = innov
+
+        if self.connections_length <= innov:
+            self.nodes_length += 20
+            new_connections_spaces = jnp.zeros((20,6),)
+            self.con_gen = jnp.concatenate((self.con_gen,new_connections_spaces), axis=0)
+
+        if self.node_gen[int(in_node),self.n_index] == 0:
+            self.add_node(in_node,NodeTypes.NODE,0.0,Rnd.randint(max=NUMBER_OF_ACTIATION_FUNCTIONS,min=0))
+
+        if self.node_gen[int(out_node),self.n_index] == 0:
+            self.add_node(out_node,NodeTypes.NODE,0.0,Rnd.randint(max=NUMBER_OF_ACTIATION_FUNCTIONS,min=0))
+
+        self.con_gen = self.con_gen.at[innov].set(jnp.array([innov,innov,in_node+1,out_node+1,weight,1.0]))
         return innov
 
     def change_weigth(self,weigth):
@@ -179,25 +209,6 @@ class Genome:
         node_index = Rnd.randint(max=len(existing_nodes))
         self.node_gen = self.node_gen.at[int(node_index),self.n_act].set(act)
 
-    def add_connection(self,innov : int,in_node : int, out_node : int, weight : float):
-        ''' Adding connection '''
-        # update innovation if is bigger than current innov of genome
-        if self.max_innov < innov:
-            self.max_innov = innov
-
-        if self.connections_length <= innov:
-            self.nodes_length += 20
-            new_connections_spaces = jnp.zeros((20,6),)
-            self.con_gen = jnp.concatenate((self.con_gen,new_connections_spaces), axis=0)
-
-        if self.node_gen[int(in_node)][0] == 0:
-            self.add_node(in_node,NodeTypes.NODE,0.0,Rnd.randint(max=NUMBER_OF_ACTIATION_FUNCTIONS,min=0))
-
-        if self.node_gen[int(out_node)][0] == 0:
-            self.add_node(out_node,NodeTypes.NODE,0.0,Rnd.randint(max=NUMBER_OF_ACTIATION_FUNCTIONS,min=0))
-
-        self.con_gen = self.con_gen.at[innov].set(jnp.array([innov,innov,in_node+1,out_node+1,weight,1.0]))
-        return innov
 
 # assuming that population is class having con_gens of size N_POPULATION x CREATURE_GENES x All information
 # For example 50 x 10 x 6 
@@ -289,30 +300,33 @@ def mate(superior : Genome, inferior : Genome):
     return offspring
 
 # this can be done better on arrays
-def cross_over(population,keep_top = 2, δ_th = 5, **kwargs):
+def cross_over(population : list,keep_top : int = 2, δ_th : float = 5, **kwargs):
     ''' cross over your population '''
+    keep_top = int(keep_top)
+    if keep_top < 2:
+        keep_top = 2
+
     new_population = []
     species = speciate(population, δ_th, **kwargs)
     species_list = []
 
-    for n,specie in enumerate(species):
+    for s_n,specie in enumerate(species):
         sorted_specie = sorted(specie, key=lambda x: x.fitness, reverse=True)[:]
         top_species = sorted_specie[:keep_top]
-
         for keept in top_species:
             new_population.append(keept)
-            species_list.append(n)
+            species_list.append(s_n)
 
-        for n in range(len(sorted_specie) - keep_top):
+        for _ in range(len(sorted_specie) - keep_top):
             n = random.randint(0,len(top_species)-1)
             m = n
             while m == n:
                 m = random.randint(0,len(top_species)-1)
-
             offspring = mate(top_species[n],top_species[m])
             new_population.append(offspring)
-            species_list.append(n)
-
+            species_list.append(s_n)
+    
+    population = []
     return new_population, species_list
 
 def random_mutate(population,
@@ -325,43 +339,44 @@ def random_mutate(population,
     for n,_ in enumerate(population):
 
         mutation_chance = random.randint(0,10)
-        if mutation_chance > nmc:
+        if mutation_chance > nmc*10:
             innov = population[n].add_r_node(innov)
 
         mutation_chance = random.randint(0,10)
-        if mutation_chance  > cmc:
+        if mutation_chance  > cmc*10:
             innov = population[n].add_r_connection(innov)
 
         mutation_chance = random.randint(0,10)
-        if mutation_chance  > wmc:
+        if mutation_chance  > wmc*10:
             population[n].change_weigth(Rnd.uniform())
 
         mutation_chance = random.randint(0,10)
-        if mutation_chance  > amc:
+        if mutation_chance  > amc*10:
             population[n].change_activation(Rnd.randint(NUMBER_OF_ACTIATION_FUNCTIONS,0))
 
         mutation_chance = random.randint(0,10)
-        if mutation_chance  > bmc:
+        if mutation_chance  > bmc*10:
             population[n].change_bias(Rnd.uniform())
 
     return innov
 
-def evolve(population,innov,**kwargs):
+def evolve(population,innov,mutate_rate,**kwargs):
     population, species_list = cross_over(population,
-                        keep_top = kwargs.get('δ_th',2),
+                        keep_top = kwargs.get('keep_top',2),
                         δ_th = kwargs.get('δ_th',5),
                         c1 = kwargs.get('C1',1),
                         c2 = kwargs.get('C2',1),
                         c3 = kwargs.get('C3',1),
                         N = kwargs.get('N',1))
 
-    innov = random_mutate(population,
-                          innov,
-                          nmc = kwargs.get('nmc',0.7),
-                          cmc = kwargs.get('cmc',0.7),
-                          wmc = kwargs.get('wmc',0.7),
-                          amc = kwargs.get('amc',0.7),
-                          bmc = kwargs.get('bmc',0.7))
+    for _ in range(mutate_rate):
+        innov = random_mutate(population,
+                            innov,
+                            nmc = kwargs.get('nmc',0.7),
+                            cmc = kwargs.get('cmc',0.7),
+                            wmc = kwargs.get('wmc',0.7),
+                            amc = kwargs.get('amc',0.7),
+                            bmc = kwargs.get('bmc',0.7))
     return (population, innov, species_list)
 
 def compiler(ngenomes, cgenomes):
@@ -377,11 +392,17 @@ def compiler(ngenomes, cgenomes):
 
     for c in cgenomes[cgenomes[:,Genome.enabled] != 0.0]:
         if Genome.o < len(c):
-            neurons[int(c[Genome.o])-1].add_input(
-                int(c[Genome.i])-1,
-                c[Genome.w],
-                neurons[int(c[Genome.i])-1].layer)
-
+            if int(c[Genome.o])-1 < len(neurons) and int(c[Genome.i])-1 < len(neurons):
+                try:
+                    neurons[int(c[Genome.o])-1].add_input(
+                        int(c[Genome.i])-1,
+                        c[Genome.w],
+                        neurons[int(c[Genome.i])-1].layer)
+                except Exception as e:
+                    print(f"caught: {e}")
+                    print(int(c[Genome.i])-1,int(c[Genome.o])-1, len(neurons),neurons)
+                    quit(-1)
+                
     ff = FeedForward(ngenomes, cgenomes)
     for neuron in neurons:
         ff.add_neuron(neuron)
@@ -484,7 +505,7 @@ class FeedForward:
 
     def dump_genomes(self):
         return {"nodes":self.ngenome,"connect" : self.cgenome}
-
+    
     def add_neuron(self,neuron):
         self.size += 1
         if neuron.type == NodeTypes.OUTPUT.value:
@@ -542,7 +563,7 @@ class FeedForward:
             self.graph.add_node(node.index,
                                 color=lightgreen_color,
                                 label=f"{act2name[int(node.act)]}\nbias: {node.bias:.2f}\nnode: {node.index}")
-            nx.set_node_attributes(self.graph, {node.index: (x,max_layer+1)}, "pos")
+            nx.set_node_attributes(self.graph, {node.index: (x * 5,max_layer+1)}, "pos")
         if node.type == NodeTypes.NODE.value:
             self.graph.add_node(node.index,
                                 color=skyblue_color,
@@ -555,12 +576,14 @@ class FeedForward:
         for l_n,l in enumerate(self.layers):
             for x,neuron in enumerate(l.neurons):
                 # print(f"displaying node: {neuron.index}")
-                self.__add_node_to_graph(neuron,x,max_layer = len(self.layers))
+                if neuron.index >= 0:
+                    self.__add_node_to_graph(neuron,x,max_layer = len(self.layers))
             
             for neuron in l.neurons:
                 for n_inputs,w in zip(neuron.input_list,neuron.weights):
                     # print(f"displaying connection: {n_inputs} {neuron.index}")
-                    self.__add_edge_to_graph(n_inputs, neuron.index, label=f'{w:.2f}',thickness=abs(w))
+                    if n_inputs >= 0 and neuron.index >= 0:
+                        self.__add_edge_to_graph(n_inputs, neuron.index, label=f'{w:.2f}',thickness=abs(w))
 
         # Get weakly connected components
         components = list(nx.weakly_connected_components(self.graph))
@@ -576,7 +599,11 @@ class FeedForward:
         self.graph.remove_nodes_from(isolated_nodes)
 
         # Draw the graph with node colors and labels
-        pos = {node: self.graph.nodes[node]["pos"] for node in self.graph.nodes()}  # Only set y-coordinate
+        try:
+            pos = {node: self.graph.nodes[node]["pos"] for node in self.graph.nodes()}
+        except:
+            print({node: self.graph.nodes[node] for node in self.graph.nodes()})
+            return 
         node_colors = [self.graph.nodes[node]["color"] for node in self.graph.nodes()]
         node_labels = {node: self.graph.nodes[node]["label"] for node in self.graph.nodes()}
         edge_thickness = [nx.get_edge_attributes(self.graph, 'thickness')[edge] for edge in self.graph.edges()]
@@ -598,7 +625,8 @@ class NEAT:
                 C2 = 1.0,
                 C3 = 1.0,
                 N = 1.0,
-                 ):
+                δ_th = 5.0
+                ):
         '''
         nmc - node mutation chance (0.0 - 1.0 higher number means lower chance)
         cmc - connection mutation chance (0.0 - 1.0 higher number means lower chance)
@@ -611,6 +639,7 @@ class NEAT:
         C2 - extended genese signifance modfier (default 1.0)
         C3 - averge weigths difference modifier (defautl 1.0)
         N - population size signficance modifier (default 1.0)
+        δ_th - threshold for making new species 
         '''
         self.innov = 0
         self.index = 1
@@ -630,6 +659,7 @@ class NEAT:
         self.C2 = C2
         self.C3 = C3
         self.N = N
+        self.δ_th = δ_th
 
         self.__population_maker()
 
@@ -651,14 +681,27 @@ class NEAT:
             creation_innov = 0
             for i in range(self.inputs):
                 for o in range(self.outputs):
-                    creation_innov += 1
-                    self.innov = self.population[n].add_connection(creation_innov,i,output_offset+o,Rnd.uniform(min=-1.0,max=1.0))
+                    creation_innov = self.population[n].add_connection(creation_innov,i,output_offset+o,Rnd.uniform(min=-1.0,max=1.0))
+                    self.innov = creation_innov
             self.species.append(0)
             genome.specie = 0
 
-    def evolve(self):
+    def load_population(self,file_name):
+
+        __genomes = pickle.load(open(file_name,"rb"))
+        ngenom = __genomes["nodes"]
+        cgenom = __genomes["connect"]
+
+        self.population = []
+        for _ in range(self.population_size):
+            genome = Genome()
+            genome.load_genomes(cgenom,ngenom)
+            self.population.append(genome)
+
+    def evolve(self,mutate_rate = 2):
         self.population,self.innov,self.species = evolve(self.population,
                                             self.innov,
+                                            mutate_rate = mutate_rate,
                                             nmc = self.nmc,
                                             cmc = self.cmc,
                                             wmc = self.wmc,
@@ -667,8 +710,9 @@ class NEAT:
                                             C1 = self.C1,
                                             C2 = self.C2,
                                             C3 = self.C3,
-                                            N = self.N)
-        
+                                            N = self.N,
+                                            δ_th = self.δ_th)
+
         for n,_ in enumerate(self.population):
             self.population[n].specie = self.species[n]
 
