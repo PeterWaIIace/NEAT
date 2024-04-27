@@ -47,18 +47,30 @@ def main():
     epochs = 100
     models_path = "models"
     evo_rate = 8
-    game = f"slimevolleygym_mutate_{evo_rate}_δ_th{δ_th}_S{POPULATION_SIZE}_N{N}_surv_{input_file}"
+    game = f"slimevolleygym_multi_mutate_{evo_rate}_δ_th{δ_th}_S{POPULATION_SIZE}_N{N}_surv_{input_file}"
     
     for e in range(epochs):
         print(f"================ EPOCH: {e} ================")
-        all_rewards = []
         os.makedirs(f"{models_path}/rest_{game}_{e}", exist_ok=True)    
 
         my_neat.evolve(evo_rate)
         networks = my_neat.evaluate()
+        all_rewards = [0] * len(networks) 
 
+        net_played = []
         for n,network in enumerate(networks):
-            network_2 = networks[random.randint(0,len(networks))]
+            n_2 = random.randint(0,len(networks)- 1)
+            
+            if n in net_played:
+                continue
+            
+            while n_2 in net_played:
+                n_2 = random.randint(0,len(networks)- 1)
+
+            net_played.append(n)
+            net_played.append(n_2)
+            
+            network_2 = networks[n_2]
 
             observation, info = env.reset()
             observation = observation[0]
@@ -66,6 +78,8 @@ def main():
 
             done = False
             total_reward = 0
+            total_reward_2 = 0
+
             while not done:
                 actions1 = network.activate(observation)
                 actions1 = np.round(actions1 + 0.5).astype(int)
@@ -77,10 +91,13 @@ def main():
                 observation2 = info['otherObs']
                 
                 total_reward += reward
+                total_reward_2 -= reward
                 oldEnv.render()
 
-            all_rewards.append(total_reward)
+            all_rewards[n] = total_reward
+            all_rewards[n_2] = total_reward_2
             print(f"net: {n}, fitness: {total_reward}")
+            print(f"net: {n_2}, fitness: {total_reward_2}")
 
             pickle.dump(network.dump_genomes(),open(f"{models_path}/rest_{game}_{e}/{game}_e{e}_n{n}.neatpy","wb"))
             network.visualize(f"rest_{game}_{e}/{game}_e{e}_n{n}")
