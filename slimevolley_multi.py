@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import argparse
 import pickle 
+import random
 import time
 import csv
 import sys
@@ -19,10 +20,11 @@ def main():
 
 
     oldEnv = slimevolleygym.SlimeVolleyEnv()
-    oldEnv.survival_bonus = True
+    oldEnv.survival_bonus = False
     oldEnv.reset()
     env = gym.make("GymV21Environment-v0", env=oldEnv, apply_api_compatibility=True, render_mode="human")
     obs = env.reset()
+
     total_reward = 0
 
     δ_th = 1
@@ -56,16 +58,26 @@ def main():
         networks = my_neat.evaluate()
 
         for n,network in enumerate(networks):
-            
+            network_2 = networks[random.randint(0,len(networks))]
+
             observation, info = env.reset()
             observation = observation[0]
+            observation2 = observation
+
             done = False
             total_reward = 0
             while not done:
-                actions = network.activate(observation)
-                actions = np.round(actions + 0.5).astype(int)
-                observation, reward, done, _, info = env.step(actions)
+                actions1 = network.activate(observation)
+                actions1 = np.round(actions1 + 0.5).astype(int)
+
+                actions2 = network_2.activate(observation2)
+                actions2 = np.round(actions2 + 0.5).astype(int)
+
+                observation, reward, done, info = oldEnv.step(actions1,otherAction = actions2)
+                observation2 = info['otherObs']
+                
                 total_reward += reward
+                oldEnv.render()
 
             all_rewards.append(total_reward)
             print(f"net: {n}, fitness: {total_reward}")

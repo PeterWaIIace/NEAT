@@ -300,8 +300,17 @@ def mate(superior : Genome, inferior : Genome):
     return offspring
 
 # this can be done better on arrays
-def cross_over(population : list,keep_top : int = 2, δ_th : float = 5, **kwargs):
+def cross_over(population : list, population_size : int = 0, keep_top : int = 2, δ_th : float = 5, **kwargs):
     ''' cross over your population '''
+
+    population_diff = 0
+    if population_size == 0:
+        population_size = len(population)
+    else:
+        population_diff = population_size - len(population)
+        print(f"[DEBUG] population_diff: {population_diff}")
+
+
     keep_top = int(keep_top)
     if keep_top < 2:
         keep_top = 2
@@ -326,7 +335,23 @@ def cross_over(population : list,keep_top : int = 2, δ_th : float = 5, **kwargs
             new_population.append(offspring)
             species_list.append(s_n)
     
+    # if size is bigger than current population
+    # fill it up equally 
+    # it may happen due to pruning
+
+    for p_n in range(population_diff):
+        specie = species[p_n % len(species)]
+        sorted_specie = sorted(specie, key=lambda x: x.fitness, reverse=True)[:]
+        top_species = sorted_specie[:keep_top]
+
+        n = random.randint(0,len(top_species)-1)
+        m = random.randint(0,len(top_species)-1)
+        offspring = mate(top_species[n],top_species[m])
+        new_population.append(offspring)
+        species_list.append(s_n)
+
     population = []
+    print(f"[DEBUG] Population number {len(new_population)}")
     return new_population, species_list
 
 def random_mutate(population,
@@ -363,6 +388,7 @@ def random_mutate(population,
 def evolve(population,innov,mutate_rate,**kwargs):
     population, species_list = cross_over(population,
                         keep_top = kwargs.get('keep_top',2),
+                        population_size = kwargs.get('population_size',len(population)),
                         δ_th = kwargs.get('δ_th',5),
                         c1 = kwargs.get('C1',1),
                         c2 = kwargs.get('C2',1),
@@ -548,12 +574,13 @@ class FeedForward:
         # if n1 in self.graph.nodes() and n2 in self.graph.nodes():
         self.graph.add_edge(n1,n2,label=label,thickness=thickness)
 
-    def __add_node_to_graph(self,node,x,max_layer = 10):
+    def __add_node_to_graph(self,node,x,layer_length,max_layer = 10):
 
         salmon_color = mcolors.to_rgba("salmon", alpha=0.5)
         lightgreen_color = mcolors.to_rgba("lightgreen", alpha=0.5)
         skyblue_color = mcolors.to_rgba("skyblue", alpha=0.5)
 
+        step = 15/layer_length
         if node.type == NodeTypes.INPUT.value:
             self.graph.add_node(node.index,
                                 color=salmon_color,
@@ -563,13 +590,13 @@ class FeedForward:
             self.graph.add_node(node.index,
                                 color=lightgreen_color,
                                 label=f"{act2name[int(node.act)]}\nbias: {node.bias:.2f}\nnode: {node.index}")
-            nx.set_node_attributes(self.graph, {node.index: (x * 5,max_layer+1)}, "pos")
+            nx.set_node_attributes(self.graph, {node.index: (x* step,max_layer+1)}, "pos")
         if node.type == NodeTypes.NODE.value:
             self.graph.add_node(node.index,
                                 color=skyblue_color,
                                 label=f"{act2name[int(node.act)]}\nbias: {node.bias:.2f}\nnode: {node.index}")
             x += (node.layer)/10
-            nx.set_node_attributes(self.graph, {node.index: (x, node.layer)}, "pos")
+            nx.set_node_attributes(self.graph, {node.index: (x* step, node.layer)}, "pos")
 
     def visualize(self,name):
         ''' Visualize graph of current network '''
@@ -577,7 +604,7 @@ class FeedForward:
             for x,neuron in enumerate(l.neurons):
                 # print(f"displaying node: {neuron.index}")
                 if neuron.index >= 0:
-                    self.__add_node_to_graph(neuron,x,max_layer = len(self.layers))
+                    self.__add_node_to_graph(neuron,x,layer_length=len(l.neurons),max_layer = len(self.layers))
             
             for neuron in l.neurons:
                 for n_inputs,w in zip(neuron.input_list,neuron.weights):
@@ -702,6 +729,7 @@ class NEAT:
         self.population,self.innov,self.species = evolve(self.population,
                                             self.innov,
                                             mutate_rate = mutate_rate,
+                                            population_size = self.population_size,
                                             nmc = self.nmc,
                                             cmc = self.cmc,
                                             wmc = self.wmc,
@@ -715,6 +743,9 @@ class NEAT:
 
         for n,_ in enumerate(self.population):
             self.population[n].specie = self.species[n]
+
+    def prune(self,threshold):
+        self.population = [genome for genome in self.population if threshold < genome.fitness]
 
     def evaluate(self):
         ''' function for evaluating genomes into ff networks '''
@@ -748,82 +779,3 @@ class NEAT:
                 "N" : self.N,
             })
         return params
-
-# def run():
-#     # env = gym.make("Acrobot-v1", render_mode="human")
-#     # env = gym.make("Acrobot-v1")
-#     my_neat = NEAT(6,3, 20)
-
-#     epochs = 50
-#     prev_action = 0.0
-#     experiment_length = 100
-#     models_path = "models"
-#     game = "SlimeVolley-v0"
-#     for e in range(epochs):
-#         print(f"================ EPOCH: {e} ================")
-#         env = gym.make(game)
-#         observation, info = env.reset(seed=42)
-#         all_rewards = []
-#         my_neat.evolve()
-
-#         networks = my_neat.evaluate()
-#         for n,network in enumerate(networks):
-#             observation, info = env.reset()
-#             total_reward = 0
-
-#             for _ in range(experiment_length):
-#                 actions = network.activate(jnp.array(observation))
-#                 action = actions.argmax()
-#                 #promote mobility
-#                 if prev_action != action:
-#                     total_reward += abs(observation[4])/10000 + abs(observation[5])/10000
-#                     prev_action = action
-
-#                 observation, reward, terminated, truncated, info = env.step(action)
-#                 total_reward += reward
-#                 if terminated or truncated:
-#                     break
-
-#             all_rewards.append(total_reward)
-#             print(f"net: {n}, fitness: {total_reward}")
-
-#         env.close()
-
-#         #display the best:
-#         index = all_rewards.index(max(all_rewards))
-#         network = networks[index]
-#         env = gym.make(game, render_mode="human")
-
-#         print(f"Displaying the best: {index}, max reward: {max(all_rewards)}")
-#         observation, info = env.reset()
-#         total_reward = 0
-
-#         for _ in range(experiment_length):
-#             actions = network.activate(jnp.array(observation))
-#             action = actions.argmax()
-#             #promote mobility
-#             if prev_action != action:
-#                 total_reward += abs(observation[4])/10000 + abs(observation[5])/10000
-#                 prev_action = action
-
-#             observation, reward, terminated, truncated, info = env.step(action)
-#             total_reward += reward
-#             if terminated or truncated:
-#                 break
-
-#         pickle.dump(network,open(f"{models_path}/{game}_e{e}.neatpy","wb"))
-#         my_neat.update(all_rewards)
-
-#         env.close()
-
-# if __name__=="__main__":
-#     run()
-
-    # population = [superior, inferior]
-    # print(speciate(population))
-
-    # print(inferior.con_gen)
-    # print(inferior.node_gen)
-    # inferior = mate(superior,inferior)
-    # print(inferior.con_gen)
-    # print(inferior.node_gen)
