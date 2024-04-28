@@ -14,74 +14,119 @@ import os
 parser = argparse.ArgumentParser(description='Description of your program')
 parser.add_argument('--input_file', '-i', type=str, default='', help='Input file path')
 
+class Tournament:
+
+    def __init__(self,players):
+        self.players = players
+        self.points = [0]*len(players)
+        self.pairs = []
+        self.played = [] 
+        self.__make_tournament()
+        pass
+
+    def generate_pairs(self):
+        raise NotImplementedError
+
+    def __make_tournament(self):
+        self.generate_pairs()
+
+    def get_next_pair(self):
+        for pair in self.pairs:
+            yield pair  
+
+    def add_points(self,player,points):
+        i = self.players.index(player)
+        self.points[i] += points
+
+
+    def get_points(self,player):
+        i = self.players.index(player)
+        return self.points[i]
+    
+    def get_score_table(self):
+        return self.points
+        
+    def show_result(self,player):
+        index = self.players.index(player)
+        print(f"player: {index }, scores: {self.get_points(player)}")
+
+    def get_player_index(self,player):
+        return self.players.index(player)
+    
+    def show_score_table(self):
+        print("====== SCORE  TABLE ======")
+        for player in self.players:
+            self.show_result(player)
+        print("====== END OF TABLE ======")
+
+class RoundRobin(Tournament):
+
+    # generate every player play with every other player
+    def generate_pairs(self):
+        self.pairs = []
+        players_cp = self.players.copy()
+        random.shuffle(players_cp)
+        for n,player_1 in enumerate(players_cp):
+            for player_2 in players_cp[n+1:]:
+                self.pairs.append((player_1,player_2))
+
+N = 10
+EPOCHS = 20
+POPULATION_SIZE = 10
+NMC = 0.5
+CMC = 0.5
+WMC = 0.5
+BMC = 0.5
+AMC = 0.5
+δ_th = 5
+
+
 def main():
-    input_file = None
-    args = parser.parse_args()
-
-
-    oldEnv = slimevolleygym.SlimeVolleyEnv()
-    oldEnv.survival_bonus = False
-    oldEnv.reset()
-    env = gym.make("GymV21Environment-v0", env=oldEnv, apply_api_compatibility=True, render_mode="human")
-    obs = env.reset()
-
-    total_reward = 0
-
-    δ_th = 1
-    N = 10
-    POPULATION_SIZE = 10
-    my_neat = NEAT(12,3,POPULATION_SIZE,
-                nmc = 0.5,
-                cmc = 0.5,
-                wmc = 0.5,
-                bmc = 0.5,
-                amc = 0.5,
+    my_neat = NEAT(12,3,
+                POPULATION_SIZE,
                 N = N,
+                nmc = NMC,
+                cmc = CMC,
+                wmc = WMC,
+                bmc = BMC,
+                amc = AMC,
                 δ_th = δ_th)
 
+    args = parser.parse_args()
+
+    oldEnv = slimevolleygym.SlimeVolleyEnv()
+    oldEnv.survival_bonus = True
+    oldEnv.reset()
+    env = gym.make("GymV21Environment-v0", env=oldEnv, apply_api_compatibility=True, render_mode="human")
+
+    input_file = None
     if args.input_file:
         input_file = args.input_file
         my_neat.load_population(input_file)
         input_file = "loaded" #WARNING: reusing variable
 
-    epochs = 100
     models_path = "models"
     evo_rate = 8
     game = f"slimevolleygym_multi_mutate_{evo_rate}_δ_th{δ_th}_S{POPULATION_SIZE}_N{N}_surv_{input_file}"
     
-    for e in range(epochs):
+    for e in range(EPOCHS):
         print(f"================ EPOCH: {e} ================")
         os.makedirs(f"{models_path}/rest_{game}_{e}", exist_ok=True)    
 
         my_neat.evolve(evo_rate)
         networks = my_neat.evaluate()
-        all_rewards = [0] * len(networks) 
 
-        net_played = []
-        for n,network in enumerate(networks):
-            n_2 = random.randint(0,len(networks)- 1)
-            
-            if n in net_played:
-                continue
-            
-            while n_2 in net_played:
-                n_2 = random.randint(0,len(networks)- 1)
-
-            net_played.append(n)
-            net_played.append(n_2)
-            
-            network_2 = networks[n_2]
+        tournament = RoundRobin(networks)
+        for network_1,network_2 in tournament.get_next_pair():
 
             observation, info = env.reset()
             observation = observation[0]
             observation2 = observation
 
             done = False
-            total_reward = 0
-            total_reward_2 = 0
 
             while not done:
-                actions1 = network.activate(observation)
+                actions1 = network_1.activate(observation)
                 actions1 = np.round(actions1 + 0.5).astype(int)
 
                 actions2 = network_2.activate(observation2)
@@ -90,22 +135,24 @@ def main():
                 observation, reward, done, info = oldEnv.step(actions1,otherAction = actions2)
                 observation2 = info['otherObs']
                 
-                total_reward += reward
-                total_reward_2 -= reward
+                tournament.add_points(network_1,reward)
+                tournament.add_points(network_2,-reward)
                 oldEnv.render()
 
-            all_rewards[n] = total_reward
-            all_rewards[n_2] = total_reward_2
-            print(f"net: {n}, fitness: {total_reward}")
-            print(f"net: {n_2}, fitness: {total_reward_2}")
+            pickle.dump(network_1.dump_genomes(),open(f"{models_path}/rest_{game}_{e}/{game}_e{e}_n{tournament.get_player_index(network_1)}.neatpy","wb"))
+            pickle.dump(network_2.dump_genomes(),open(f"{models_path}/rest_{game}_{e}/{game}_e{e}_n{tournament.get_player_index(network_2)}.neatpy","wb"))
+            
+        tournament.show_score_table()
 
-            pickle.dump(network.dump_genomes(),open(f"{models_path}/rest_{game}_{e}/{game}_e{e}_n{n}.neatpy","wb"))
-            network.visualize(f"rest_{game}_{e}/{game}_e{e}_n{n}")
+        scores = tournament.get_score_table()
+        avg_fitness = np.sum(scores)/len(scores)
+        print(f"Average fitness: {avg_fitness}")
+        my_neat.update(scores)
 
-        avg_fitness = np.sum(all_rewards)/len(all_rewards)
-        print(f"Average fitness: {np.sum(all_rewards)/len(all_rewards)}")
-        my_neat.update(all_rewards)
-        my_neat.prune(avg_fitness)
+        print(f"species after: {np.max(my_neat.species)} and networks: {len(networks)}")
+        if np.max(my_neat.species) == len(networks):
+            print(f"prunning everything below: {avg_fitness}")
+            my_neat.prune(avg_fitness)
         
         params = my_neat.get_params()
         # List of keys to define the order of columns in the CSV
@@ -120,12 +167,14 @@ def main():
                 writer.writerow(p)
 
         # save the best
-        index = all_rewards.index(max(all_rewards))
+        index = scores.index(max(scores))
         network = networks[index]
         pickle.dump(network.dump_genomes(),open(f"{models_path}/{game}_e{e}_best.neatpy","wb"))
         network.visualize(f"{game}_e{e}_best")
 
     env.close()
+
+import resource
 
 if __name__=="__main__":
     main()

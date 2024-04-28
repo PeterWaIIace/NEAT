@@ -316,12 +316,14 @@ def cross_over(population : list, population_size : int = 0, keep_top : int = 2,
         keep_top = 2
 
     new_population = []
+    print("[DEBUG] Speciating")
     species = speciate(population, δ_th, **kwargs)
     species_list = []
 
     for s_n,specie in enumerate(species):
         sorted_specie = sorted(specie, key=lambda x: x.fitness, reverse=True)[:]
         top_species = sorted_specie[:keep_top]
+
         for keept in top_species:
             new_population.append(keept)
             species_list.append(s_n)
@@ -338,7 +340,6 @@ def cross_over(population : list, population_size : int = 0, keep_top : int = 2,
     # if size is bigger than current population
     # fill it up equally 
     # it may happen due to pruning
-
     for p_n in range(population_diff):
         specie = species[p_n % len(species)]
         sorted_specie = sorted(specie, key=lambda x: x.fitness, reverse=True)[:]
@@ -351,7 +352,7 @@ def cross_over(population : list, population_size : int = 0, keep_top : int = 2,
         species_list.append(s_n)
 
     population = []
-    print(f"[DEBUG] Population number {len(new_population)}")
+    print(f"[DEBUG] Population number {len(new_population)}, {species_list}")
     return new_population, species_list
 
 def random_mutate(population,
