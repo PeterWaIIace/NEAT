@@ -42,10 +42,10 @@ class Tournament:
     def get_points(self,player):
         i = self.players.index(player)
         return self.points[i]
-    
+
     def get_score_table(self):
         return self.points
-        
+ 
     def show_result(self,player):
         index = self.players.index(player)
         print(f"player: {index }, scores: {self.get_points(player)}")
