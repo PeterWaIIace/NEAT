@@ -79,6 +79,8 @@ WMC = 0.5
 BMC = 0.5
 AMC = 0.5
 δ_th = 5
+MUTATE_RATE = 16
+RENDER_HUMAN = False
 
 
 def main():
@@ -97,7 +99,10 @@ def main():
     oldEnv = slimevolleygym.SlimeVolleyEnv()
     oldEnv.survival_bonus = True
     oldEnv.reset()
-    env = gym.make("GymV21Environment-v0", env=oldEnv, apply_api_compatibility=True, render_mode="human")
+    if RENDER_HUMAN :
+        env = gym.make("GymV21Environment-v0", env=oldEnv, apply_api_compatibility=True,render_mode = "human")
+    else:
+        env = gym.make("GymV21Environment-v0", env=oldEnv, apply_api_compatibility=True)
 
     input_file = None
     if args.input_file:
@@ -106,17 +111,19 @@ def main():
         input_file = "loaded" #WARNING: reusing variable
 
     models_path = "models"
-    evo_rate = 8
-    game = f"slimevolleygym_multi_mutate_{evo_rate}_δ_th{δ_th}_S{POPULATION_SIZE}_N{N}_surv_{input_file}"
+    game = f"slimevolleygym_multi_mutate_{MUTATE_RATE}_δ_th{δ_th}_S{POPULATION_SIZE}_N{N}_surv_{input_file}"
     
     for e in range(EPOCHS):
+        start_time = time.time()
         print(f"================ EPOCH: {e} ================")
         os.makedirs(f"{models_path}/rest_{game}_{e}", exist_ok=True)    
 
-        my_neat.evolve(evo_rate)
+        my_neat.evolve(MUTATE_RATE)
         networks = my_neat.evaluate()
 
         tournament = RoundRobin(networks)
+        print(f"prepareing phase took: {(time.time() - start_time)}s")
+        start_time = time.time()
         for network_1,network_2 in tournament.get_next_pair():
 
             observation, info = env.reset()
@@ -137,20 +144,25 @@ def main():
                 
                 tournament.add_points(network_1,reward)
                 tournament.add_points(network_2,-reward)
-                oldEnv.render()
+
+                if RENDER_HUMAN :
+                    oldEnv.render()
 
             pickle.dump(network_1.dump_genomes(),open(f"{models_path}/rest_{game}_{e}/{game}_e{e}_n{tournament.get_player_index(network_1)}.neatpy","wb"))
             pickle.dump(network_2.dump_genomes(),open(f"{models_path}/rest_{game}_{e}/{game}_e{e}_n{tournament.get_player_index(network_2)}.neatpy","wb"))
-            
+            network_1.visualize(f"rest_{game}_{e}/{game}_e{e}_n{tournament.get_player_index(network_1)}")
+            network_2.visualize(f"rest_{game}_{e}/{game}_e{e}_n{tournament.get_player_index(network_2)}")
+
         tournament.show_score_table()
 
         scores = tournament.get_score_table()
         avg_fitness = np.sum(scores)/len(scores)
+        print(f"elapsed time: {(time.time() - start_time)}s average game time: {(time.time() - start_time)/len(scores)}s")
         print(f"Average fitness: {avg_fitness}")
         my_neat.update(scores)
 
         print(f"species after: {np.max(my_neat.species)} and networks: {len(networks)}")
-        if np.max(my_neat.species) == len(networks):
+        if np.max(my_neat.species) >= len(networks) - 1:
             print(f"prunning everything below: {avg_fitness}")
             my_neat.prune(avg_fitness)
         
@@ -159,7 +171,7 @@ def main():
         keys = ["net","specienumber", "fitness", "connections", "nodes", "nmc", "cmc", "wmc", "bmc", "amc", "C1", "C2", "C3", "N"]
         # Write data to CSV file
         with open(f"{models_path}/csv_params_{game}_e{e}", mode='w', newline='') as file:
-            writer = csv.DictWriter(file, fieldnames=keys)            
+            writer = csv.DictWriter(file, fieldnames=keys)  
             # Write header
             writer.writeheader()
             for p in params:

@@ -98,12 +98,12 @@ def main():
     network = my_neat.evaluate()[0]
 
     observation = oldEnv.reset()
-    observation = observation[0]
 
     score = 0
 
     done = False
     while not done:
+        print(observation)
         actions = network.activate(observation)
         actions = np.round(actions + 0.5).astype(int)
 
