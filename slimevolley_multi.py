@@ -70,9 +70,19 @@ class RoundRobin(Tournament):
             for player_2 in players_cp[n+1:]:
                 self.pairs.append((player_1,player_2))
 
+
+class AgainstItself(Tournament):
+
+    # generate every player play with every other player
+    def generate_pairs(self):
+        self.pairs = []
+        players_cp = self.players.copy()
+        for n,player_1 in enumerate(players_cp):
+            self.pairs.append((player_1,player_1))
+
 N = 10
-EPOCHS = 20
-POPULATION_SIZE = 10
+GENERATIONS = 20
+POPULATION_SIZE = 4
 NMC = 0.5
 CMC = 0.5
 WMC = 0.5
@@ -80,7 +90,7 @@ BMC = 0.5
 AMC = 0.5
 δ_th = 5
 MUTATE_RATE = 16
-RENDER_HUMAN = False
+RENDER_HUMAN = True
 
 
 def main():
@@ -113,15 +123,22 @@ def main():
     models_path = "models"
     game = f"slimevolleygym_multi_mutate_{MUTATE_RATE}_δ_th{δ_th}_S{POPULATION_SIZE}_N{N}_surv_{input_file}"
     
-    for e in range(EPOCHS):
+    for e in range(GENERATIONS):
         start_time = time.time()
         print(f"================ EPOCH: {e} ================")
         os.makedirs(f"{models_path}/rest_{game}_{e}", exist_ok=True)    
+    
+        # EVOLVE EVERYTHING
+        my_neat.mutate_activation(amc=AMC)
+        my_neat.mutate_weight(epsylon = 0.1,wmc=WMC)
+        my_neat.mutate_bias(epsylon = 0.1,bmc=BMC)
+        my_neat.mutate_nodes(nmc=NMC)
+        my_neat.mutate_connections(cmc=CMC)
+        my_neat.cross_over(δ_th = δ_th, N = N)
 
-        my_neat.evolve(MUTATE_RATE)
         networks = my_neat.evaluate()
 
-        tournament = RoundRobin(networks)
+        tournament = AgainstItself(networks)
         print(f"prepareing phase took: {(time.time() - start_time)}s")
         start_time = time.time()
         for network_1,network_2 in tournament.get_next_pair():
@@ -134,17 +151,14 @@ def main():
 
             while not done:
                 actions1 = network_1.activate(observation)
-                actions1 = np.round(actions1 + 0.5).astype(int)
-
                 actions2 = network_2.activate(observation2)
-                actions2 = np.round(actions2 + 0.5).astype(int)
-
+                
                 observation, reward, done, info = oldEnv.step(actions1,otherAction = actions2)
                 observation2 = info['otherObs']
                 
                 tournament.add_points(network_1,reward)
-                tournament.add_points(network_2,-reward)
-
+                # tournament.add_points(network_2,-reward)
+                
                 if RENDER_HUMAN :
                     oldEnv.render()
 
@@ -161,11 +175,6 @@ def main():
         print(f"Average fitness: {avg_fitness}")
         my_neat.update(scores)
 
-        print(f"species after: {np.max(my_neat.species)} and networks: {len(networks)}")
-        if np.max(my_neat.species) >= len(networks) - 1:
-            print(f"prunning everything below: {avg_fitness}")
-            my_neat.prune(avg_fitness)
-        
         params = my_neat.get_params()
         # List of keys to define the order of columns in the CSV
         keys = ["net","specienumber", "fitness", "connections", "nodes", "nmc", "cmc", "wmc", "bmc", "amc", "C1", "C2", "C3", "N"]
@@ -183,6 +192,11 @@ def main():
         network = networks[index]
         pickle.dump(network.dump_genomes(),open(f"{models_path}/{game}_e{e}_best.neatpy","wb"))
         network.visualize(f"{game}_e{e}_best")
+
+        print(f"species after: {np.max(my_neat.species)} and networks: {len(networks)}")
+        if np.max(my_neat.species) >= len(networks) - 1:
+            print(f"prunning everything below: {avg_fitness}")
+            my_neat.prune(avg_fitness)        
 
     env.close()
 

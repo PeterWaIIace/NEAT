@@ -11,6 +11,7 @@ import jax.random as jrnd
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
+from jax import jit
 from enum import Enum
 
 # First networkx library is imported  
@@ -39,10 +40,21 @@ class StatefulRandomGenerator:
         self.key = jrnd.split(self.key,1)[0]
         return rnd_value[0]
 
-    def uniform(self,max=1.0,min=0):
-        random_float = jrnd.uniform(self.key, shape=(1,), minval=min, maxval=max)
+    def uniform(self,max=1.0,min=0,shape=(1,)):
+        random_float = jrnd.uniform(self.key, shape=shape, minval=min, maxval=max)
         self.key = jrnd.split(self.key,1)[0]
-        return random_float[0]
+        if shape == (1,):
+            return random_float[0]
+        else:
+            return random_float
+        
+    def binary(self,p = 0.5, shape=(1,)):
+        binary_array = jax.random.bernoulli(self.key, p=p, shape=shape)
+        self.key = jrnd.split(self.key,1)[0]
+        if shape == (1,):
+            return binary_array[0]
+        else:
+            return binary_array
         
 
 Rnd = StatefulRandomGenerator()
@@ -97,14 +109,13 @@ class Genome:
     n_act  = 3
 
     def __init__(self):
-        self.connections_length = 20
-        self.nodes_length = 20
-        self.max_innov = 0
         self.index = 0
-        self.fitness = 1.0
         self.specie = 0
-        # helper indicies names
-        # Connections genomes is array, rows are genomes, but cols are parameters of that genomes
+        self.fitness = 1.0
+        self.max_innov = 0
+        self.nodes_length = 20
+        self.connections_length = 20
+
         self.con_gen  = jnp.zeros((self.connections_length,6),)
         self.node_gen = jnp.zeros((self.nodes_length,4),)
 
@@ -158,7 +169,7 @@ class Genome:
                             out_node-1,
                             self.con_gen[index_of_connection,self.w]
                         )
-        
+
         in_node = int(new_node)
         out_node = int(self.con_gen[index_of_connection,self.o])
         innov = self.add_connection(innov,
@@ -181,7 +192,7 @@ class Genome:
             self.max_innov = innov
 
         if self.connections_length <= innov:
-            self.nodes_length += 20
+            self.connections_length += 20
             new_connections_spaces = jnp.zeros((20,6),)
             self.con_gen = jnp.concatenate((self.con_gen,new_connections_spaces), axis=0)
 
@@ -195,19 +206,13 @@ class Genome:
         return innov
 
     def change_weigth(self,weigth):
-        exisitng_connections = self.con_gen[self.con_gen[:,0] != 0]
-        index_of_connection = Rnd.randint(max=len(exisitng_connections))
-        self.con_gen = self.con_gen.at[index_of_connection,self.w].set(weigth)
+        self.con_gen = self.con_gen.at[:,self.w].add(weigth)
 
     def change_bias(self,bias):
-        existing_nodes = self.node_gen[self.node_gen[:,0] != 0]
-        node_index = Rnd.randint(max=len(existing_nodes))
-        self.node_gen = self.node_gen.at[node_index,self.n_bias].set(bias)
+        self.node_gen = self.node_gen.at[:,self.n_bias].add(bias)
 
     def change_activation(self,act):
-        existing_nodes = self.node_gen[self.node_gen[:,0] != 0]
-        node_index = Rnd.randint(max=len(existing_nodes))
-        self.node_gen = self.node_gen.at[int(node_index),self.n_act].set(act)
+        self.node_gen = self.node_gen.at[:,self.n_act].set(act)
 
 
 # assuming that population is class having con_gens of size N_POPULATION x CREATURE_GENES x All information
@@ -355,82 +360,25 @@ def cross_over(population : list, population_size : int = 0, keep_top : int = 2,
     print(f"[DEBUG] Population number {len(new_population)}, {species_list}")
     return new_population, species_list
 
-def random_mutate(population,
-                innov = 0,
-                nmc = 0.7, 
-                cmc = 0.7,
-                wmc = 0.7,
-                amc = 0.7,
-                bmc = 0.7):
-    for n,_ in enumerate(population):
-
-        mutation_chance = random.randint(0,10)
-        if mutation_chance > nmc*10:
-            innov = population[n].add_r_node(innov)
-
-        mutation_chance = random.randint(0,10)
-        if mutation_chance  > cmc*10:
-            innov = population[n].add_r_connection(innov)
-
-        mutation_chance = random.randint(0,10)
-        if mutation_chance  > wmc*10:
-            population[n].change_weigth(Rnd.uniform())
-
-        mutation_chance = random.randint(0,10)
-        if mutation_chance  > amc*10:
-            population[n].change_activation(Rnd.randint(NUMBER_OF_ACTIATION_FUNCTIONS,0))
-
-        mutation_chance = random.randint(0,10)
-        if mutation_chance  > bmc*10:
-            population[n].change_bias(Rnd.uniform())
-
-    return innov
-
-def evolve(population,innov,mutate_rate,**kwargs):
-    population, species_list = cross_over(population,
-                        keep_top = kwargs.get('keep_top',2),
-                        population_size = kwargs.get('population_size',len(population)),
-                        δ_th = kwargs.get('δ_th',5),
-                        c1 = kwargs.get('C1',1),
-                        c2 = kwargs.get('C2',1),
-                        c3 = kwargs.get('C3',1),
-                        N = kwargs.get('N',1))
-
-    for _ in range(mutate_rate):
-        innov = random_mutate(population,
-                            innov,
-                            nmc = kwargs.get('nmc',0.7),
-                            cmc = kwargs.get('cmc',0.7),
-                            wmc = kwargs.get('wmc',0.7),
-                            amc = kwargs.get('amc',0.7),
-                            bmc = kwargs.get('bmc',0.7))
-    return (population, innov, species_list)
-
-def compiler(ngenomes, cgenomes):
+def compiler(genome):
+    ''' compile your network into FF network '''
     # I need to make sure that all output neurons are at the same layer
+    ngenomes, cgenomes = genome.node_gen, genome.con_gen
     neurons = []
     active_nodes = ngenomes[ngenomes[:,0] != 0.0]
-    for n,node in enumerate(active_nodes):
+    for _,node in enumerate(active_nodes):
         neurons.append(
             Neuron(node)
         )
-        # neurons[n].inputs  = cgenomes[cgenomes[:,Genome.o] == n][:,Genome.i]
-        # neurons[n].weights = cgenomes[cgenomes[:,Genome.o] == n][:,Genome.i]
 
     for c in cgenomes[cgenomes[:,Genome.enabled] != 0.0]:
-        if Genome.o < len(c):
-            if int(c[Genome.o])-1 < len(neurons) and int(c[Genome.i])-1 < len(neurons):
-                try:
-                    neurons[int(c[Genome.o])-1].add_input(
-                        int(c[Genome.i])-1,
-                        c[Genome.w],
-                        neurons[int(c[Genome.i])-1].layer)
-                except Exception as e:
-                    print(f"caught: {e}")
-                    print(int(c[Genome.i])-1,int(c[Genome.o])-1, len(neurons),neurons)
-                    quit(-1)
-                
-    ff = FeedForward(ngenomes, cgenomes)
+        if int(c[Genome.o])-1 < len(neurons) and int(c[Genome.i])-1 < len(neurons):
+            neurons[int(c[Genome.o])-1].add_input(
+                int(c[Genome.i])-1,
+                c[Genome.w],
+                neurons[int(c[Genome.i])-1].layer)
+            
+    ff = FeedForward(genome)
     for neuron in neurons:
         ff.add_neuron(neuron)
 
@@ -447,8 +395,10 @@ class Neuron:
         self.act  = node_genome[Genome.n_act]
         self.input_list = []
         self.weights = []
-
-        
+        if self.type == NodeTypes.INPUT.value:
+            self.input_list = [self.index]
+            self.weights = [1.0]
+   
     def add_input(self,in_neuron,weigth,layer):
         self.input_list.append(in_neuron)
         self.weights.append(weigth)
@@ -470,6 +420,7 @@ class Neuron:
         )
 
 class Layer:
+    ''' middle temporary layer '''
     # TODO: distinguish between output layers and rest
 
     def __init__(self,index):
@@ -512,7 +463,7 @@ class Layer:
                 self.biases = self.biases.at[n_i].set(n.bias)
                 self.acts = self.acts.at[n_i].set(n.act)
 
-                self.weigths = self.weigths.at[n_i,n.input_list].set(jnp.array(n.weights))  
+                self.weigths = self.weigths.at[n_i,n.input_list].set(n.weights)
         # now layer is complied
 
     def forward(self,input):
@@ -521,9 +472,8 @@ class Layer:
 
 class FeedForward:
 
-    def __init__(self,ngenome,cgenome):
-        self.ngenome = ngenome
-        self.cgenome = cgenome
+    def __init__(self,genome):
+        self.genome = genome
         self.index = 0
         self.size = 0
         self.layers = [Layer(self.index)]
@@ -531,7 +481,7 @@ class FeedForward:
         self.graph = nx.DiGraph()
 
     def dump_genomes(self):
-        return {"nodes":self.ngenome,"connect" : self.cgenome}
+        return {"nodes":self.genome.node_gen,"connect" : self.genome.con_gen}
     
     def add_neuron(self,neuron):
         self.size += 1
@@ -555,13 +505,13 @@ class FeedForward:
             l.compile()
 
     def activate(self,x):
-        output = jnp.zeros(self.size)
-        output = output.at[:len(x)].set(x)
-
-        for l in self.layers[1:]:
-            output = output.at[l.outputs].set(l.forward(output))
-
-        return output[self.layers[-1].outputs]
+        output = x
+        for l in self.layers:
+            input = output[l.inputs]
+            output = (input @ l.weigths.T) + l.biases
+            output = l.vmap_activate(output,l.acts)
+        
+        return output
 
     def print(self):
 
@@ -726,21 +676,51 @@ class NEAT:
             genome.load_genomes(cgenom,ngenom)
             self.population.append(genome)
 
-    def evolve(self,mutate_rate = 2):
-        self.population,self.innov,self.species = evolve(self.population,
-                                            self.innov,
-                                            mutate_rate = mutate_rate,
-                                            population_size = self.population_size,
-                                            nmc = self.nmc,
-                                            cmc = self.cmc,
-                                            wmc = self.wmc,
-                                            bmc = self.bmc,
-                                            amc = self.amc,
-                                            C1 = self.C1,
-                                            C2 = self.C2,
-                                            C3 = self.C3,
-                                            N = self.N,
-                                            δ_th = self.δ_th)
+    def mutate_activation(self,amc = 0.7):
+        for genome in self.population:
+            length = len(genome.node_gen[:,0])
+            genome.change_activation(
+                Rnd.randint(NUMBER_OF_ACTIATION_FUNCTIONS,0) *
+                Rnd.binary(p = amc,shape=(length,))
+            )
+
+    def mutate_weight(self,epsylon = 0.1,wmc = 0.7):
+        for genome in self.population:
+            length = len(genome.con_gen[:,0])
+            genome.change_weigth(
+                Rnd.uniform(epsylon,-epsylon,shape=(length,)) *
+                Rnd.binary(p = wmc,shape=(length,))
+            )
+
+    def mutate_bias(self,epsylon = 0.1,bmc = 0.7):
+        for genome in self.population:
+            length = len(genome.node_gen[:,0])
+            genome.change_bias(
+                Rnd.uniform(epsylon,-epsylon,shape=(length,)) *
+                Rnd.binary(p = bmc,shape=(length,))
+            )
+
+    def mutate_nodes(self,nmc = 0.7):
+        for genome in self.population:
+            mutation_chance = random.randint(0,10)
+            if mutation_chance > nmc*10:
+                self.innov = genome.add_r_node(self.innov)
+
+    def mutate_connections(self,cmc = 0.7):
+        for genome in self.population:
+            mutation_chance = random.randint(0,10)
+            if mutation_chance  > cmc*10:
+                self.innov = genome.add_r_connection(self.innov)
+
+    def cross_over(self,keep_top = 2, δ_th = 5, c1 = 1.0, c2 = 1.0, c3 = 1.0, N = 1.0):
+        self.population, self.species = cross_over(self.population,
+                keep_top = keep_top,
+                population_size = len(self.population),
+                δ_th = δ_th,
+                c1 = c1,
+                c2 = c2,
+                c3 = c3,
+                N = N)
 
         for n,_ in enumerate(self.population):
             self.population[n].specie = self.species[n]
@@ -752,7 +732,7 @@ class NEAT:
         ''' function for evaluating genomes into ff networks '''
         networks = []
         for genome in self.population:
-            networks.append(compiler(genome.node_gen,genome.con_gen))
+            networks.append(compiler(genome))
         return networks
 
     def update(self,fitness):

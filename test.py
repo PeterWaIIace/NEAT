@@ -1,9 +1,15 @@
 import jax.numpy as jnp
 
-# Define the array
-arr = jnp.array([0.21, 0.43, 0.75, 0.5, 0.49, 0.51])
+def create_mask(indices, length, values):
+    indices_arr = jnp.array(indices)
+    values_arr = jnp.array(values)
+    mask = jnp.zeros(length)
+    mask = mask.at[indices_arr].set(values_arr)
+    return mask
 
-# Round to the nearest integer with ties rounding to the nearest even integer
-rounded_arr = jnp.round(arr + 0.5).astype(int)
+indices = [3, 5, 8]
+values = [0.43, 0.23, 0.54]
+length = 11  # Assuming the length of the desired mask array
 
-print(rounded_arr)
+mask = create_mask(indices, length, values)
+print(mask)
