@@ -13,6 +13,18 @@ import os
 parser = argparse.ArgumentParser(description='Description of your program')
 parser.add_argument('--input_file', '-i', type=str, default='', help='Input file path')
 
+N = 10
+GENERATIONS = 20
+POPULATION_SIZE = 20
+NMC = 0.5
+CMC = 0.5
+WMC = 0.5
+BMC = 0.5
+AMC = 0.5
+δ_th = 5
+MUTATE_RATE = 16
+RENDER_HUMAN = True
+
 def main():
     input_file = None
     args = parser.parse_args()
@@ -26,7 +38,7 @@ def main():
     total_reward = 0
 
     δ_th = 1
-    N = 10
+    N = 50
     POPULATION_SIZE = 10
     my_neat = NEAT(12,3,POPULATION_SIZE,
                 nmc = 0.5,
@@ -52,7 +64,13 @@ def main():
         all_rewards = []
         os.makedirs(f"{models_path}/rest_{game}_{e}", exist_ok=True)    
 
-        my_neat.evolve(evo_rate)
+        # EVOLVE EVERYTHING
+        my_neat.mutate_activation(amc=AMC)
+        my_neat.mutate_weight(epsylon = 0.1,wmc=WMC)
+        my_neat.mutate_bias(epsylon = 0.1,bmc=BMC)
+        my_neat.mutate_nodes(nmc=NMC)
+        my_neat.mutate_connections(cmc=CMC)
+        my_neat.cross_over(δ_th = δ_th, N = N)
         networks = my_neat.evaluate()
 
         for n,network in enumerate(networks):

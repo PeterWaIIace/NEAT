@@ -360,7 +360,7 @@ def cross_over(population : list, population_size : int = 0, keep_top : int = 2,
     print(f"[DEBUG] Population number {len(new_population)}, {species_list}")
     return new_population, species_list
 
-def compiler(genome):
+def compiler(genome,input_size):
     ''' compile your network into FF network '''
     # I need to make sure that all output neurons are at the same layer
     ngenomes, cgenomes = genome.node_gen, genome.con_gen
@@ -374,13 +374,11 @@ def compiler(genome):
     for c in cgenomes[cgenomes[:,Genome.enabled] != 0.0]:
         if int(c[Genome.o])-1 < len(neurons) and int(c[Genome.i])-1 < len(neurons):
             neurons[int(c[Genome.o])-1].add_input(
-                int(c[Genome.i])-1,
-                c[Genome.w],
-                neurons[int(c[Genome.i])-1].layer)
+                neurons[int(c[Genome.i])-1],
+                c[Genome.w])
             
-    ff = FeedForward(genome)
-    for neuron in neurons:
-        ff.add_neuron(neuron)
+    ff = FeedForward(input_size,genome)
+    ff.add_neurons(neurons)
 
     ff.compile()
     return ff
@@ -389,21 +387,26 @@ class Neuron:
 
     def __init__(self,node_genome):
         self.index = int(node_genome[0]) - 1
+        self.in_layer = self.index
         self.layer = 0
         self.type = int(node_genome[1])
         self.bias = node_genome[Genome.n_bias]
         self.act  = node_genome[Genome.n_act]
         self.input_list = []
+        self.input_neurons = []
         self.weights = []
         if self.type == NodeTypes.INPUT.value:
             self.input_list = [self.index]
             self.weights = [1.0]
    
-    def add_input(self,in_neuron,weigth,layer):
-        self.input_list.append(in_neuron)
+    def add_input(self,in_neuron,weigth):
+        self.input_neurons.append(in_neuron)
+        self.input_list.append(in_neuron.index)
         self.weights.append(weigth)
-        if layer >= self.layer:
-            self.layer = layer + 1
+
+        for neuron in self.input_neurons:
+            if neuron.layer >= self.layer:
+                self.layer = neuron.layer + 1
 
     def getLayer(self):
         return self.layer
@@ -411,115 +414,99 @@ class Neuron:
     def get(self):
         return {self.layer : jnp.array(self.weights)}
 
-    def print(self):
-        print(
-        f"self.index:     {self.index}\
-          self.layer:     {self.layer}\
-          self.input_list {self.input_list}\
-          self.weights    {self.weights}"
-        )
-
 class Layer:
-    ''' middle temporary layer '''
-    # TODO: distinguish between output layers and rest
 
-    def __init__(self,index):
-        self.layer_index = index
+    def __init__(self,index,input_size,max_width):
+        self.weights = None
+        self.index = index
+        self.width = max_width
+        self.input_size = input_size
+        self.residual_connection = jnp.identity(input_size)
         self.neurons = []
-
-        self.weigths = None
-        self.inputs  = None
-        self.outputs = None
-        self.biases = None
-        self.acts = None
-
-        self.inputs_len  = 0
-        self.outputs_len = 0
 
         self.vmap_activate = jax.vmap(activation_func)
 
+    def update_size(self,input_size):
+        self.input_size = input_size
+        self.width = input_size + len(self.neurons)
+        self.residual_connection = jnp.identity(self.input_size)
+        
     def add_neuron(self,neuron):
-        self.outputs_len += 1
-        if len(neuron.input_list) > 0:
-            self.inputs_len = jnp.max(jnp.array(neuron.input_list))+1
+        neuron.in_layer = self.input_size+len(self.neurons)
         self.neurons.append(neuron)
-        # neuron.
+        # what to do if there is more neurons than max length 
 
-    def compile(self):
-
-        self.weigths = jnp.zeros((self.outputs_len,self.inputs_len),dtype = jnp.float32)
-        self.inputs  = jnp.zeros((self.inputs_len),dtype = jnp.int32)
-        self.outputs = jnp.zeros((self.outputs_len),dtype = jnp.int32)
-        self.acts   = jnp.zeros((self.outputs_len),dtype = jnp.int32)
-        self.biases = jnp.zeros((self.outputs_len),dtype = jnp.float32)
-
-        filled_in_length = 0
-        for n_i,n in enumerate(self.neurons):
-            if len(self.inputs) > 0:
-                self.inputs = self.inputs.at[jnp.array(n.input_list)].set(jnp.array(n.input_list))
-                filled_in_length += len(n.input_list)
-
-                self.outputs = self.outputs.at[n_i].set(n.index)
-                self.biases = self.biases.at[n_i].set(n.bias)
-                self.acts = self.acts.at[n_i].set(n.act)
-
-                self.weigths = self.weigths.at[n_i,n.input_list].set(n.weights)
-        # now layer is complied
-
-    def forward(self,input):
-        X = jnp.dot(input[self.inputs],self.weigths.T) + self.biases
-        return activation_func(X,self.acts)
-
+    def compile(self,last=False):
+        if last == True:
+            self.width = self.input_size
+            weights = jnp.zeros((self.width,len(self.neurons)))
+            self.bias = jnp.zeros(len(self.neurons))
+            self.acts = jnp.zeros(len(self.neurons),dtype=jnp.int32)
+        else:
+            tmp_weight = jnp.zeros((self.input_size,len(self.neurons)))
+            weights    = jnp.concatenate((self.residual_connection, tmp_weight), axis=1).T
+            self.bias  = jnp.zeros((self.width))
+            self.acts = jnp.zeros((self.width),dtype=jnp.int32)
+            
+        for n,neuron in enumerate(self.neurons):
+            if len(neuron.input_neurons) > 0:
+                column = jnp.zeros((self.width))
+                inputs = jnp.array([in_neuron.in_layer for in_neuron in neuron.input_neurons],dtype=jnp.int32)
+                n_weights = jnp.array(neuron.weights)
+                
+                column = column.at[inputs].set(n_weights)
+                weights = weights.at[:,n].set(column)
+            self.bias = self.bias.at[n].set(neuron.bias)
+            self.acts = self.acts.at[n].set(int(neuron.act))
+        
+        self.weights = weights
+        if last == True:
+            self.weights = self.weights.T
+        return weights.shape[0]
+    
 class FeedForward:
 
-    def __init__(self,genome):
+    def __init__(self,input_size,genome):
         self.genome = genome
-        self.index = 0
-        self.size = 0
-        self.layers = [Layer(self.index)]
-        self.output_layer = Layer(999)
+        self.INPUT_SIZE = input_size
+        self.max_width = input_size
+
+        self.layers = []
+        self.layers.append(Layer(0,self.INPUT_SIZE,self.INPUT_SIZE))
         self.graph = nx.DiGraph()
 
     def dump_genomes(self):
         return {"nodes":self.genome.node_gen,"connect" : self.genome.con_gen}
-    
-    def add_neuron(self,neuron):
-        self.size += 1
-        if neuron.type == NodeTypes.OUTPUT.value:
-            self.output_layer.add_neuron(neuron)
-        else:
-            layer_index = neuron.getLayer()
 
-            while layer_index >= len(self.layers):
-                self.index += 1
-                self.layers.append(Layer(self.index))
+    def add_neurons(self,neurons):
+        self.max_width = self.INPUT_SIZE
+        for neuron in sorted(neurons,key=lambda neuron: neuron.layer):
+            if len(self.layers) > neuron.layer:
+                self.layers[neuron.layer].add_neuron(neuron)
+            else:
+                self.layers.append(Layer(neuron.layer,self.INPUT_SIZE,self.max_width))
+                self.layers[neuron.layer].add_neuron(neuron)
 
-            self.layers[layer_index].add_neuron(neuron)
+            if len(self.layers[neuron.layer].neurons) > self.max_width:
+                self.max_width = len(self.layers[neuron.layer].neurons) 
 
     def compile(self):
-        self.index += 1
-        self.output_layer.index = self.index
-        self.layers.append(self.output_layer)
-
-        for l in self.layers:
-            l.compile()
+        new_input = self.INPUT_SIZE
+        for layer in self.layers:
+            layer.width = self.max_width
+            if layer == self.layers[-1]:
+                layer.update_size(new_input)
+                new_input = layer.compile(last=True)
+            else:
+                layer.update_size(new_input)
+                new_input = layer.compile()
 
     def activate(self,x):
-        output = x
-        for l in self.layers:
-            input = output[l.inputs]
-            output = (input @ l.weigths.T) + l.biases
-            output = l.vmap_activate(output,l.acts)
-        
-        return output
-
-    def print(self):
-
-        for l in self.layers:
-            print("====================================")
-            print(f"weigths: {l.weigths}")
-            print(f"inputs:  {l.inputs}")
-            print(f"outputs: {l.outputs}")
+        output_values = x
+        for layer in self.layers:
+            output_values = jnp.dot(output_values,layer.weights.T) + layer.bias
+            output_values = layer.vmap_activate(output_values,layer.acts)
+        return output_values
 
     def __add_edge_to_graph(self,n1,n2,label,thickness):
         # if n1 in self.graph.nodes() and n2 in self.graph.nodes():
@@ -713,9 +700,10 @@ class NEAT:
                 self.innov = genome.add_r_connection(self.innov)
 
     def cross_over(self,keep_top = 2, δ_th = 5, c1 = 1.0, c2 = 1.0, c3 = 1.0, N = 1.0):
+        print(f"[CROSS_OVER]{len(self.population)}")
         self.population, self.species = cross_over(self.population,
                 keep_top = keep_top,
-                population_size = len(self.population),
+                population_size = self.population_size,
                 δ_th = δ_th,
                 c1 = c1,
                 c2 = c2,
@@ -726,13 +714,14 @@ class NEAT:
             self.population[n].specie = self.species[n]
 
     def prune(self,threshold):
+        print(f"[PRUNE]")
         self.population = [genome for genome in self.population if threshold < genome.fitness]
 
     def evaluate(self):
         ''' function for evaluating genomes into ff networks '''
         networks = []
         for genome in self.population:
-            networks.append(compiler(genome))
+            networks.append(compiler(genome,self.inputs))
         return networks
 
     def update(self,fitness):

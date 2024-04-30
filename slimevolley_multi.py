@@ -82,7 +82,7 @@ class AgainstItself(Tournament):
 
 N = 10
 GENERATIONS = 20
-POPULATION_SIZE = 4
+POPULATION_SIZE = 20
 NMC = 0.5
 CMC = 0.5
 WMC = 0.5
