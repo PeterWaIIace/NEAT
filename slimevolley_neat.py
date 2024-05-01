@@ -94,7 +94,7 @@ def main():
             print(f"net: {n}, fitness: {total_reward}")
 
             pickle.dump(network.dump_genomes(),open(f"{models_path}/rest_{game}_{e}/{game}_e{e}_n{n}.neatpy","wb"))
-            network.visualize(f"rest_{game}_{e}/{game}_e{e}_n{n}")
+            # network.visualize(f"rest_{game}_{e}/{game}_e{e}_n{n}")
 
         avg_fitness = np.sum(all_rewards)/len(all_rewards)
         print(f"Average fitness: {np.sum(all_rewards)/len(all_rewards)}")
@@ -116,7 +116,7 @@ def main():
         index = all_rewards.index(max(all_rewards))
         network = networks[index]
         pickle.dump(network.dump_genomes(),open(f"{models_path}/{game}_e{e}_best.neatpy","wb"))
-        network.visualize(f"{game}_e{e}_best")
+        # network.visualize(f"{game}_e{e}_best")
 
     env.close()
 

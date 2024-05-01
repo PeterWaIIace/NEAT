@@ -624,7 +624,8 @@ class FeedForward:
         # Draw the graph with node colors and labels
         try:
             pos = {node: self.graph.nodes[node]["pos"] for node in self.graph.nodes()}
-        except:
+        except Exception as e:
+            print(f"Caught exception: {e}")
             print({node: self.graph.nodes[node] for node in self.graph.nodes()})
             return 
         node_colors = [self.graph.nodes[node]["color"] for node in self.graph.nodes()]
