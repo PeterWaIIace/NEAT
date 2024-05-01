@@ -13,7 +13,7 @@ import matplotlib.colors as mcolors
 
 from jax import jit
 from enum import Enum
-from arrayPainter import display_array
+from arrayPainter import display_array, display_with_values
 # First networkx library is imported  
 # along with matplotlib 
 
@@ -443,10 +443,15 @@ class Layer:
         # what to do if there is more neurons than max length 
 
     def compile(self,last=False):
+        
         self.residual_connection = jnp.identity(self.input_size)
         if last == True:
             self.width = self.input_size
-            weights   = jnp.zeros((len(self.neurons),self.width))
+            weights   = jnp.zeros((self.width,len(self.neurons)))
+            self.bias = jnp.zeros(len(self.neurons))
+            self.acts = jnp.zeros(len(self.neurons),dtype=jnp.int32)
+        elif self.index == 0:
+            weights   = jnp.identity(len(self.neurons))
             self.bias = jnp.zeros(len(self.neurons))
             self.acts = jnp.zeros(len(self.neurons),dtype=jnp.int32)
         else:
@@ -462,19 +467,29 @@ class Layer:
             
         for n,neuron in enumerate(self.neurons):
             if len(neuron.input_neurons) > 0:
-                column = jnp.zeros((self.width))
+                column = jnp.zeros((self.input_size))
                 inputs = jnp.array([in_neuron.in_layer for in_neuron in neuron.input_neurons],dtype=jnp.int32)
                 n_weights = jnp.array(neuron.weights)
                 
                 column = column.at[inputs].set(n_weights)
-                weights = weights.at[n,:].set(column)
-            self.bias = self.bias.at[n].set(neuron.bias)
-            self.acts = self.acts.at[n].set(int(neuron.act))
+                print(n+self.input_size)
+                display_with_values([weights, weights[:,n+self.input_size], column ,self.bias],["green","yellow","purple","blue"])
+                if last == True:
+                    weights = weights.at[:,n].set(column)
+                else:
+                    weights = weights.at[:,n+self.input_size].set(column)
+            if last == True:
+                self.bias = self.bias.at[n].set(neuron.bias)
+                self.acts = self.acts.at[n].set(int(neuron.act))
+            else:         
+                self.bias = self.bias.at[n+self.input_size].set(neuron.bias)
+                self.acts = self.acts.at[n+self.input_size].set(int(neuron.act))
         
-        display_array([weights, self.bias],["green","blue"])
         self.weights = weights
-        if self.index == 0 or last == True:
+        if self.index == 0:
             self.weights = self.weights.T
+
+        display_with_values([self.weights, self.bias],["green","blue"])
         return self.bias.shape[0]
     
 class FeedForward:
@@ -502,13 +517,18 @@ class FeedForward:
         for neuron in sorted_neurons:
             if len(neuron.input_neurons) == 0 and neuron.type != NodeTypes.INPUT.value:
                 continue
-
+            
+            print("layer:",neuron.layer)
             if len(self.layers) > neuron.layer:
                 self.layers[neuron.layer].add_neuron(neuron)
             else:
                 for n in range(neuron.layer - (len(self.layers)-1)):
                     self.layers.append(Layer(len(self.layers) + n,self.INPUT_SIZE,self.max_width))
-                    self.layers[neuron.layer].add_neuron(neuron)
+                    try:
+                        self.layers[neuron.layer].add_neuron(neuron)
+                    except Exception as e:
+                        print(f"Crashed here: {e} with {neuron.layer} and len {len(self.layers)}")
+                        exit()
 
             if len(self.layers[neuron.layer].neurons) > self.max_width:
                 self.max_width = len(self.layers[neuron.layer].neurons)
@@ -533,7 +553,8 @@ class FeedForward:
         output_values = x
         for layer in self.layers:
             # print([neuron.type for neuron in layer.neurons])
-            display_array([output_values,layer.weights,layer.bias],["purple","red","yellow"])
+            # display_array([output_values,layer.weights,layer.bias],["purple","red","yellow"])
+            display_with_values([output_values,layer.weights,jnp.dot(output_values,layer.weights),layer.bias],["purple","red","orange","yellow"])
             output_values = jnp.dot(output_values,layer.weights) + layer.bias
             output_values = activation_func(output_values,layer.acts)
         # print(f"{output_values},{len(output_values)}")

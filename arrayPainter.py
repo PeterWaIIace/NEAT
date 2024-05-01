@@ -58,11 +58,54 @@ def draw_array(array,color='reset'):
 
     return viz_matrix
 
+def draw_with_values(array,color='reset'):
+    length = array.shape[0]
+    if len(array.shape) == 1:
+        height = 1
+        array = array.reshape(length,height)
+    else:
+        height = array.shape[1]
+
+    distancer = "     "
+    viz_matrix = []
+
+    viz_matrix.append(f"{colors[color]}⎡"+distancer*length+f"⎤{colors['reset']}")
+    for h in range(height):
+        line = f"{colors[color]}⎢"
+        for v in array[:,h]:
+            line += f" {v:.1f} "
+        line += f"⎥{colors['reset']}"
+        viz_matrix.append(line)
+    viz_matrix.append(f"{colors[color]}⎣"+distancer*length+f"⎦{colors['reset']}")
+
+    return viz_matrix
+
 
 def display_array(arrays,colors):
     to_draw = []
     for array,color in zip(arrays,colors):
         to_draw.append(draw_array(array,color))
+
+    longest = max([len(n) for n in to_draw])
+    distancer = " "
+
+    for row_n in range(longest):
+        print_payload = ""
+
+        for n,draw in enumerate(to_draw):
+            if row_n >= longest - len(draw):
+                row_m = row_n - (longest - len(draw))
+                print_payload += draw[row_m]
+            else:
+                # weird magical number but somehow I will survive it 
+                print_payload += " " * (len(draw[0]) - 9)
+
+        print(print_payload)
+
+def display_with_values(arrays,colors):
+    to_draw = []
+    for array,color in zip(arrays,colors):
+        to_draw.append(draw_with_values(array,color))
 
     longest = max([len(n) for n in to_draw])
     distancer = " "

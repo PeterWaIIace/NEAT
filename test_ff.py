@@ -59,8 +59,8 @@ class Neuron:
     def get(self):
         return {self.layer : jnp.array(self.weights)}
 
-
-def main():
+if __name__=="__main__":
+    
     INPUT_SIZE = 3
     OUTPUT_SIZE = 2
 
@@ -68,31 +68,28 @@ def main():
 
     layers = []
     neurons = [
-        Neuron(0,0.5,1, NodeTypes.INPUT.value),
-        Neuron(1,0.5,1, NodeTypes.INPUT.value),
-        Neuron(2,0.5,1, NodeTypes.INPUT.value),
-        Neuron(3,0.5,1, NodeTypes.NODE.value),
-        Neuron(4,0.5,1, NodeTypes.NODE.value),
-        Neuron(5,0.5,1, NodeTypes.NODE.value),
-        Neuron(6,0.5,1, NodeTypes.OUTPUT.value),
-        Neuron(7,0.5,1,NodeTypes.OUTPUT.value)
+        Neuron(0,0.5,0, NodeTypes.INPUT.value),
+        Neuron(1,0.5,0, NodeTypes.INPUT.value),
+        Neuron(2,0.5,0, NodeTypes.INPUT.value),
+        Neuron(3,0.5,0, NodeTypes.NODE.value),
+        Neuron(4,0.5,0, NodeTypes.NODE.value),
+        Neuron(5,0.5,0, NodeTypes.OUTPUT.value),
+        Neuron(6,0.5,0, NodeTypes.OUTPUT.value)
     ]
 
     neurons[3].add_input(neurons[0],1.0)
     neurons[3].add_input(neurons[1],1.0)
-    neurons[4].add_input(neurons[3],1.0)
+    neurons[4].add_input(neurons[2],1.0)
     neurons[5].add_input(neurons[3],1.0)
-    neurons[5].add_input(neurons[2],1.0)
+    neurons[6].add_input(neurons[3],1.0)
     neurons[6].add_input(neurons[4],1.0)
-    neurons[6].add_input(neurons[5],1.0)
-    neurons[7].add_input(neurons[5],1.0)
-    neurons[7].add_input(neurons[0],1.0)
 
     FF = FeedForward(INPUT_SIZE,OUTPUT_SIZE)
     FF.add_neurons(neurons)
     FF.compile()
-    FF.dry()
 
-
-if __name__=="__main__":
-    main()
+    payload = jnp.array([1,1,1])
+    expected = jnp.array([4.,6.])
+    result = FF.activate(payload)
+    print(expected,result)
+    assert jnp.array_equal(expected,result)
