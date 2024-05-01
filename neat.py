@@ -13,7 +13,7 @@ import matplotlib.colors as mcolors
 
 from jax import jit
 from enum import Enum
-from arrayPainter import display_array, display_with_values
+from arrayPainter import display_array, display_array
 # First networkx library is imported  
 # along with matplotlib 
 
@@ -429,15 +429,18 @@ class Layer:
         self.width = max_width
         self.input_size = input_size
         self.neurons = []
+        self.neurons_index_offset = 0
         self.vmap_activate = jax.vmap(activation_func)
 
     def update_size(self,input_size):
         print(f"updating input size")
         self.input_size = input_size
         self.width = input_size + len(self.neurons)
+        self.neurons_index_offset = input_size
         
     def add_neuron(self,neuron):
-        neuron.in_layer = self.input_size+len(self.neurons)
+        neuron.in_layer = len(self.neurons)
+        print(neuron.in_layer,neuron.index,self.input_size)
         self.neurons.append(neuron)
         self.width += 1
         # what to do if there is more neurons than max length 
@@ -462,18 +465,22 @@ class Layer:
                 weights    = jnp.concatenate((self.residual_connection, tmp_weights), axis=1)
             else:
                 weights = tmp_weights
-            self.bias  = jnp.zeros((self.width))
+            self.bias = jnp.zeros((self.width))
             self.acts = jnp.zeros((self.width),dtype=jnp.int32)
             
         for n,neuron in enumerate(self.neurons):
+            # update all neurons indexes based on offset in this layer
+            neuron.in_layer += self.neurons_index_offset
+
             if len(neuron.input_neurons) > 0:
                 column = jnp.zeros((self.input_size))
                 inputs = jnp.array([in_neuron.in_layer for in_neuron in neuron.input_neurons],dtype=jnp.int32)
                 n_weights = jnp.array(neuron.weights)
                 
+                print(neuron.layer,neuron.index,inputs)
                 column = column.at[inputs].set(n_weights)
                 print(n+self.input_size)
-                display_with_values([weights, weights[:,n+self.input_size], column ,self.bias],["green","yellow","purple","blue"])
+                display_array([weights, weights[:,n+self.input_size], column ,self.bias],["green","yellow","purple","blue"])
                 if last == True:
                     weights = weights.at[:,n].set(column)
                 else:
@@ -489,7 +496,7 @@ class Layer:
         if self.index == 0:
             self.weights = self.weights.T
 
-        display_with_values([self.weights, self.bias],["green","blue"])
+        display_array([self.weights, self.bias],["green","blue"])
         return self.bias.shape[0]
     
 class FeedForward:
@@ -544,20 +551,17 @@ class FeedForward:
             layer.width = self.max_width
             if layer == self.layers[-1]:
                 layer.update_size(new_input)
-                new_input = layer.compile(last=True)
+                layer.compile(last=True)
             else:
                 layer.update_size(new_input)
                 new_input = layer.compile()
+                print(f"new_input: {new_input}")
 
     def activate(self,x):
         output_values = x
         for layer in self.layers:
-            # print([neuron.type for neuron in layer.neurons])
-            # display_array([output_values,layer.weights,layer.bias],["purple","red","yellow"])
-            display_with_values([output_values,layer.weights,jnp.dot(output_values,layer.weights),layer.bias],["purple","red","orange","yellow"])
             output_values = jnp.dot(output_values,layer.weights) + layer.bias
             output_values = activation_func(output_values,layer.acts)
-        # print(f"{output_values},{len(output_values)}")
         return output_values
     
     def dry(self):
