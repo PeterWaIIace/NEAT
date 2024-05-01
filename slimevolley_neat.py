@@ -87,9 +87,6 @@ def main():
                 actions[actions < 0.0] = 0.0
                 if np.sum(actions) != 0:
                     action_t[np.argmax(actions)] = 1
-
-                print(observation)
-                print(actions,action_t)
                 observation, reward, done, _, info = env.step(action_t)
                 total_reward += reward
 

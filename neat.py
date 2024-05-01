@@ -477,9 +477,7 @@ class Layer:
                 inputs = jnp.array([in_neuron.in_layer for in_neuron in neuron.input_neurons],dtype=jnp.int32)
                 n_weights = jnp.array(neuron.weights)
                 
-                print(neuron.layer,neuron.index,inputs)
                 column = column.at[inputs].set(n_weights)
-                print(n+self.input_size)
                 display_array([weights, weights[:,n+self.input_size], column ,self.bias],["green","yellow","purple","blue"])
                 if last == True:
                     weights = weights.at[:,n].set(column)
@@ -525,7 +523,6 @@ class FeedForward:
             if len(neuron.input_neurons) == 0 and neuron.type != NodeTypes.INPUT.value:
                 continue
             
-            print("layer:",neuron.layer)
             if len(self.layers) > neuron.layer:
                 self.layers[neuron.layer].add_neuron(neuron)
             else:
@@ -555,7 +552,6 @@ class FeedForward:
             else:
                 layer.update_size(new_input)
                 new_input = layer.compile()
-                print(f"new_input: {new_input}")
 
     def activate(self,x):
         output_values = x
