@@ -1,20 +1,37 @@
-# Define color codes with background equivalents
-colors = {
-    'red': '\033[91m',
-    'green': '\033[92m',
-    'yellow': '\033[93m',
-    'purple': '\033[95m',
-    'blue':    '\033[94m',
-    'orange': '\033[33m',
-    'reset': '\033[0m',  # Reset color to default
-    'bg_red': '\033[101m',
-    'bg_green': '\033[102m',
-    'bg_yellow': '\033[103m',
-    'bg_purple': '\033[105m',
-    'bg_blue': '\033[104m',
-    'bg_orange': '\033[43m'
-}
+import jax.numpy as jnp
 
-# Example usage:
-print(colors['bg_yellow'] + "This is text with a yellow background" + colors['reset'])
-print(colors['bg_purple'] + "This is text with a purple background" + colors['reset'])
+def func1(x):
+    return x * 2
+
+def func2(x):
+    return x + 10
+
+def func3(x):
+    return x / 2
+
+def func4(x):
+    return x ** 2
+
+def apply_functions(data, codes):
+    # Ensure the data and codes are JAX arrays
+    data = jnp.array(data)
+    codes = jnp.array(codes)
+
+    # Result array
+    result = jnp.zeros_like(data, dtype=jnp.float32)
+
+    # Apply each function based on the code
+    result = jnp.where(codes == 1, func1(data), result)
+    result = jnp.where(codes == 2, func2(data), result)
+    result = jnp.where(codes == 3, func3(data), result)
+    result = jnp.where(codes == 4, func4(data), result)
+
+    return result
+
+# Example data and codes
+data = jnp.array([10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0])
+codes = jnp.array([1, 2, 2, 1, 1, 4, 3, 3, 2, 4])
+
+# Apply functions
+result = apply_functions(data, codes)
+print(result)

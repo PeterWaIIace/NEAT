@@ -19,6 +19,20 @@ def draw_array(array,color='reset'):
     shape_0 = length
     shape_1 = height
 
+    if length > 10 or height > 10:
+        if length > height:
+            length = 9
+            if height > 10:
+                height = 7
+            else:
+                height = height
+        else:
+            if length > 10:
+                length = 7
+            else:
+                length = length + 2 
+            height = 9
+
     distancer = "   "
     filler = " . "
 
@@ -32,8 +46,10 @@ def draw_array(array,color='reset'):
     viz_matrix.append(f"{colors[color]}⎡"+distancer*length+f"⎤{colors['reset']}")
     for h in range(height):
         if h == half_h:
-            if shape_0 > 9:
+            if len(f"{shape_0}x{shape_1}") == 4:
                 viz_matrix.append(f"{colors[color]}⎢"+filler*half_l+f"{shape_0}x{shape_1}  "+filler*(half_l-1)+f"⎥{colors['reset']}")            
+            elif len(f"{shape_0}x{shape_1}") == 5:
+                viz_matrix.append(f"{colors[color]}⎢"+filler*half_l+f"{shape_0}x{shape_1} "+filler*(half_l-1)+f"⎥{colors['reset']}")            
             else:
                 viz_matrix.append(f"{colors[color]}⎢"+filler*half_l+f"{shape_0}x{shape_1}"+filler*half_l+f"⎥{colors['reset']}")
         else:

@@ -80,15 +80,15 @@ class AgainstItself(Tournament):
         for n,player_1 in enumerate(players_cp):
             self.pairs.append((player_1,player_1))
 
-N = 10
-GENERATIONS = 20
+N = 20
+GENERATIONS = 100
 POPULATION_SIZE = 20
 NMC = 0.5
 CMC = 0.5
 WMC = 0.5
 BMC = 0.5
 AMC = 0.5
-δ_th = 5
+δ_th = 10
 MUTATE_RATE = 16
 RENDER_HUMAN = True
 
@@ -132,8 +132,10 @@ def main():
         my_neat.mutate_activation(amc=AMC)
         my_neat.mutate_weight(epsylon = 0.1,wmc=WMC)
         my_neat.mutate_bias(epsylon = 0.1,bmc=BMC)
-        my_neat.mutate_nodes(nmc=NMC)
-        my_neat.mutate_connections(cmc=CMC)
+        for _ in range(MUTATE_RATE):
+            my_neat.mutate_nodes(nmc=NMC)
+            my_neat.mutate_connections(cmc=CMC)
+       
         my_neat.cross_over(δ_th = δ_th, N = N)
 
         networks = my_neat.evaluate()

@@ -13,7 +13,7 @@ import matplotlib.colors as mcolors
 
 from jax import jit
 from enum import Enum
-
+from arrayPainter import display_array
 # First networkx library is imported  
 # along with matplotlib 
 
@@ -89,14 +89,15 @@ def softplus(x):
 def tanh(x):
     return jnp.tanh(x)
 
-def activation_func(x,y):
+def activation_func(x,code):
     ''' branchless and vectorized activation functions'''
-    return jnp.where(y == 0, x,
-            jnp.where(y == 1, sigmoid(x),
-            jnp.where(y == 2, ReLU(x),
-            jnp.where(y == 3, leakyReLU(x),
-            jnp.where(y == 4, softplus(x),
-                        tanh(x))))))
+    result = x
+    result = jnp.where(code == 1, sigmoid(x),  result)
+    result = jnp.where(code == 2, ReLU(x),     result)
+    result = jnp.where(code == 3, leakyReLU(x),result)
+    result = jnp.where(code == 4, softplus(x), result)
+    result = jnp.where(code == 5, tanh(x),     result)
+    return result
 class Genome:
 
     i = 2
@@ -206,8 +207,10 @@ class Genome:
         return innov
 
     def change_weigth(self,weigth):
+        print(f"changing weights: {weigth}")
         self.con_gen = self.con_gen.at[:,self.w].add(weigth)
-
+        print(f"changing weights: {self.con_gen[:,self.w]}")
+        
     def change_bias(self,bias):
         self.node_gen = self.node_gen.at[:,self.n_bias].add(bias)
 
@@ -383,6 +386,7 @@ def compiler(genome,input_size):
     ff.compile()
     return ff
 
+LAST_LAYER = 0xDEADBEEF
 class Neuron:
 
     def __init__(self,node_genome):
@@ -404,9 +408,12 @@ class Neuron:
         self.input_list.append(in_neuron.index)
         self.weights.append(weigth)
 
-        for neuron in self.input_neurons:
-            if neuron.layer >= self.layer:
-                self.layer = neuron.layer + 1
+        if self.type != NodeTypes.OUTPUT.value:
+            for neuron in self.input_neurons:
+                if neuron.layer >= self.layer:
+                    self.layer = neuron.layer + 1
+        else:
+            self.layer = LAST_LAYER
 
     def getLayer(self):
         return self.layer
@@ -421,30 +428,35 @@ class Layer:
         self.index = index
         self.width = max_width
         self.input_size = input_size
-        self.residual_connection = jnp.identity(input_size)
         self.neurons = []
-
         self.vmap_activate = jax.vmap(activation_func)
 
     def update_size(self,input_size):
+        print(f"updating input size")
         self.input_size = input_size
         self.width = input_size + len(self.neurons)
-        self.residual_connection = jnp.identity(self.input_size)
         
     def add_neuron(self,neuron):
         neuron.in_layer = self.input_size+len(self.neurons)
         self.neurons.append(neuron)
+        self.width += 1
         # what to do if there is more neurons than max length 
 
     def compile(self,last=False):
+        self.residual_connection = jnp.identity(self.input_size)
         if last == True:
             self.width = self.input_size
-            weights = jnp.zeros((self.width,len(self.neurons)))
+            weights   = jnp.zeros((len(self.neurons),self.width))
             self.bias = jnp.zeros(len(self.neurons))
             self.acts = jnp.zeros(len(self.neurons),dtype=jnp.int32)
         else:
-            tmp_weight = jnp.zeros((self.input_size,len(self.neurons)))
-            weights    = jnp.concatenate((self.residual_connection, tmp_weight), axis=1).T
+            if self.input_size == 0:
+                self.input_size = 1
+            tmp_weights = jnp.zeros((self.input_size,len(self.neurons)))
+            if self.residual_connection.shape != (0,0):
+                weights    = jnp.concatenate((self.residual_connection, tmp_weights), axis=1)
+            else:
+                weights = tmp_weights
             self.bias  = jnp.zeros((self.width))
             self.acts = jnp.zeros((self.width),dtype=jnp.int32)
             
@@ -455,14 +467,15 @@ class Layer:
                 n_weights = jnp.array(neuron.weights)
                 
                 column = column.at[inputs].set(n_weights)
-                weights = weights.at[:,n].set(column)
+                weights = weights.at[n,:].set(column)
             self.bias = self.bias.at[n].set(neuron.bias)
             self.acts = self.acts.at[n].set(int(neuron.act))
         
+        display_array([weights, self.bias],["green","blue"])
         self.weights = weights
-        if last == True:
+        if self.index == 0 or last == True:
             self.weights = self.weights.T
-        return weights.shape[0]
+        return self.bias.shape[0]
     
 class FeedForward:
 
@@ -472,7 +485,7 @@ class FeedForward:
         self.max_width = input_size
 
         self.layers = []
-        self.layers.append(Layer(0,self.INPUT_SIZE,self.INPUT_SIZE))
+        self.layers.append(Layer(0,0,0))
         self.graph = nx.DiGraph()
 
     def dump_genomes(self):
@@ -480,18 +493,33 @@ class FeedForward:
 
     def add_neurons(self,neurons):
         self.max_width = self.INPUT_SIZE
-        for neuron in sorted(neurons,key=lambda neuron: neuron.layer):
+        sorted_neurons = sorted(neurons,key=lambda neuron: neuron.layer)
+        
+
+        output_neurons = [neuron for neuron in sorted_neurons if neuron.layer == LAST_LAYER]
+        sorted_neurons = [neuron for neuron in sorted_neurons if neuron.layer != LAST_LAYER]
+
+        for neuron in sorted_neurons:
+            if len(neuron.input_neurons) == 0 and neuron.type != NodeTypes.INPUT.value:
+                continue
+
             if len(self.layers) > neuron.layer:
                 self.layers[neuron.layer].add_neuron(neuron)
             else:
-                self.layers.append(Layer(neuron.layer,self.INPUT_SIZE,self.max_width))
-                self.layers[neuron.layer].add_neuron(neuron)
+                for n in range(neuron.layer - (len(self.layers)-1)):
+                    self.layers.append(Layer(len(self.layers) + n,self.INPUT_SIZE,self.max_width))
+                    self.layers[neuron.layer].add_neuron(neuron)
 
             if len(self.layers[neuron.layer].neurons) > self.max_width:
-                self.max_width = len(self.layers[neuron.layer].neurons) 
+                self.max_width = len(self.layers[neuron.layer].neurons)
+
+        last_layer = len(self.layers)
+        self.layers.append(Layer(last_layer,self.INPUT_SIZE,self.max_width))
+        for neuron in output_neurons:
+            self.layers[last_layer].add_neuron(neuron)
 
     def compile(self):
-        new_input = self.INPUT_SIZE
+        new_input = 0
         for layer in self.layers:
             layer.width = self.max_width
             if layer == self.layers[-1]:
@@ -504,9 +532,19 @@ class FeedForward:
     def activate(self,x):
         output_values = x
         for layer in self.layers:
-            output_values = jnp.dot(output_values,layer.weights.T) + layer.bias
-            output_values = layer.vmap_activate(output_values,layer.acts)
+            # print([neuron.type for neuron in layer.neurons])
+            display_array([output_values,layer.weights,layer.bias],["purple","red","yellow"])
+            output_values = jnp.dot(output_values,layer.weights) + layer.bias
+            output_values = activation_func(output_values,layer.acts)
+        # print(f"{output_values},{len(output_values)}")
         return output_values
+    
+    def dry(self):
+        print("----------------------------------------")
+        for layer in self.layers:
+            display_array([layer.weights,layer.bias],["red","green"])
+            print(layer.weights)
+            print(layer.bias)
 
     def __add_edge_to_graph(self,n1,n2,label,thickness):
         # if n1 in self.graph.nodes() and n2 in self.graph.nodes():
@@ -518,7 +556,6 @@ class FeedForward:
         lightgreen_color = mcolors.to_rgba("lightgreen", alpha=0.5)
         skyblue_color = mcolors.to_rgba("skyblue", alpha=0.5)
 
-        step = 15/layer_length
         if node.type == NodeTypes.INPUT.value:
             self.graph.add_node(node.index,
                                 color=salmon_color,
@@ -528,13 +565,13 @@ class FeedForward:
             self.graph.add_node(node.index,
                                 color=lightgreen_color,
                                 label=f"{act2name[int(node.act)]}\nbias: {node.bias:.2f}\nnode: {node.index}")
-            nx.set_node_attributes(self.graph, {node.index: (x* step,max_layer+1)}, "pos")
+            nx.set_node_attributes(self.graph, {node.index: (x,max_layer+1)}, "pos")
         if node.type == NodeTypes.NODE.value:
             self.graph.add_node(node.index,
                                 color=skyblue_color,
                                 label=f"{act2name[int(node.act)]}\nbias: {node.bias:.2f}\nnode: {node.index}")
             x += (node.layer)/10
-            nx.set_node_attributes(self.graph, {node.index: (x* step, node.layer)}, "pos")
+            nx.set_node_attributes(self.graph, {node.index: (x, node.layer)}, "pos")
 
     def visualize(self,name):
         ''' Visualize graph of current network '''
@@ -635,18 +672,18 @@ class NEAT:
             
             index =  0
             for i in range(self.inputs):
-                self.population[n].add_node(index,NodeTypes.INPUT,Rnd.uniform(min=-1.0,max=1.0),Rnd.randint(max=NUMBER_OF_ACTIATION_FUNCTIONS))
+                self.population[n].add_node(index,NodeTypes.INPUT,0.0,Rnd.randint(max=NUMBER_OF_ACTIATION_FUNCTIONS))
                 index += 1
             
             output_offset = index
             for o in range(self.outputs):
-                self.population[n].add_node(index,NodeTypes.OUTPUT,Rnd.uniform(min=-1.0,max=1.0),Rnd.randint(max=NUMBER_OF_ACTIATION_FUNCTIONS))
+                self.population[n].add_node(index,NodeTypes.OUTPUT,0.0,Rnd.randint(max=NUMBER_OF_ACTIATION_FUNCTIONS))
                 index += 1
 
             creation_innov = 0
             for i in range(self.inputs):
                 for o in range(self.outputs):
-                    creation_innov = self.population[n].add_connection(creation_innov,i,output_offset+o,Rnd.uniform(min=-1.0,max=1.0))
+                    creation_innov = self.population[n].add_connection(creation_innov,i,output_offset+o,0.0)
                     self.innov = creation_innov
             self.species.append(0)
             genome.specie = 0
@@ -675,7 +712,7 @@ class NEAT:
         for genome in self.population:
             length = len(genome.con_gen[:,0])
             genome.change_weigth(
-                Rnd.uniform(epsylon,-epsylon,shape=(length,)) *
+                Rnd.uniform(max=epsylon,min=-epsylon,shape=(length,)) *
                 Rnd.binary(p = wmc,shape=(length,))
             )
 
