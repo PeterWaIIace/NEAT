@@ -209,7 +209,7 @@ class Genome:
     def change_weigth(self,weigth):
         print(f"changing weights: {weigth}")
         self.con_gen = self.con_gen.at[:,self.w].add(weigth)
-        print(f"changing weights: {self.con_gen[:,self.w]}")
+        print(f"changed weights: {self.con_gen[:,self.w]}")
         
     def change_bias(self,bias):
         self.node_gen = self.node_gen.at[:,self.n_bias].add(bias)
@@ -433,14 +433,12 @@ class Layer:
         self.vmap_activate = jax.vmap(activation_func)
 
     def update_size(self,input_size):
-        print(f"updating input size")
         self.input_size = input_size
         self.width = input_size + len(self.neurons)
         self.neurons_index_offset = input_size
         
     def add_neuron(self,neuron):
         neuron.in_layer = len(self.neurons)
-        print(neuron.in_layer,neuron.index,self.input_size)
         self.neurons.append(neuron)
         self.width += 1
         # what to do if there is more neurons than max length 
@@ -478,7 +476,6 @@ class Layer:
                 n_weights = jnp.array(neuron.weights)
                 
                 column = column.at[inputs].set(n_weights)
-                display_array([weights, weights[:,n+self.input_size], column ,self.bias],["green","yellow","purple","blue"])
                 if last == True:
                     weights = weights.at[:,n].set(column)
                 else:
@@ -528,11 +525,11 @@ class FeedForward:
             else:
                 for n in range(neuron.layer - (len(self.layers)-1)):
                     self.layers.append(Layer(len(self.layers) + n,self.INPUT_SIZE,self.max_width))
-                    try:
-                        self.layers[neuron.layer].add_neuron(neuron)
-                    except Exception as e:
-                        print(f"Crashed here: {e} with {neuron.layer} and len {len(self.layers)}")
-                        exit()
+                try:
+                    self.layers[neuron.layer].add_neuron(neuron)
+                except Exception as e:
+                    print(f"Crashed here: {e} with {neuron.layer} and len {len(self.layers)}")
+                    exit()
 
             if len(self.layers[neuron.layer].neurons) > self.max_width:
                 self.max_width = len(self.layers[neuron.layer].neurons)

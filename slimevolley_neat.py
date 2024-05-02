@@ -66,13 +66,13 @@ def main():
     game = f"slimevolleygym_mutate_{MUTATE_RATE}_δ_th{δ_th}_S{POPULATION_SIZE}_N{N}_surv_{input_file}"
     
     for e in range(GENERATIONS):
-        print(f"================ EPOCH: {e} ================")
         all_rewards = []
         os.makedirs(f"{models_path}/rest_{game}_{e}", exist_ok=True)    
 
         my_neat = mutate(my_neat)
         networks = my_neat.evaluate()
 
+        print(f"================ EPOCH: {e} ================")
         for n,network in enumerate(networks):
             
             observation, info = env.reset()
