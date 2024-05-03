@@ -92,7 +92,6 @@ AMC = 0.5
 MUTATE_RATE = 16
 RENDER_HUMAN = True
 
-
 def main():
     my_neat = NEAT(12,3,
                 POPULATION_SIZE,

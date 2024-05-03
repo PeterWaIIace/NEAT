@@ -208,6 +208,7 @@ class Genome:
 
     def change_weigth(self,weigth):
         print(f"changing weights: {weigth}")
+        print(f"before: {self.con_gen[:,self.w]}")
         self.con_gen = self.con_gen.at[:,self.w].add(weigth)
         print(f"changed weights: {self.con_gen[:,self.w]}")
         
@@ -336,14 +337,16 @@ def cross_over(population : list, population_size : int = 0, keep_top : int = 2,
             new_population.append(keept)
             species_list.append(s_n)
 
-        for _ in range(len(sorted_specie) - keep_top):
-            n = random.randint(0,len(top_species)-1)
+        for __n in range(len(sorted_specie) - keep_top):
+            n = __n % keep_top
             m = n
             while m == n:
                 m = random.randint(0,len(top_species)-1)
+            print(f"mating: {top_species[n].fitness} with {top_species[m].fitness}")
             offspring = mate(top_species[n],top_species[m])
             new_population.append(offspring)
             species_list.append(s_n)
+            n = random.randint(0,len(top_species)-1)
     
     # if size is bigger than current population
     # fill it up equally 
@@ -491,7 +494,7 @@ class Layer:
         if self.index == 0:
             self.weights = self.weights.T
 
-        display_array([self.weights, self.bias],["green","blue"])
+        # display_array([self.weights, self.bias],["green","blue"])
         return self.bias.shape[0]
     
 class FeedForward:

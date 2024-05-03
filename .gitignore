@@ -2,3 +2,4 @@ neat_venv/*
 *.pyc
 models/*
 _past_models/*
+xla_logs/*
