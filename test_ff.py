@@ -10,7 +10,7 @@ import csv
 import sys
 import os
 
-from neat import FeedForward, NodeTypes
+from neat import FeedForward, NodeTypes, Genome, Neuron as GNeuron
 from enum import Enum
 
 N = 10
@@ -38,7 +38,7 @@ class Neuron:
         self.input_neurons = []
         self.weights = []
         if self.type == NodeTypes.INPUT.value:
-            self.input_list = [self.index]
+            self.input_list = []
             self.weights = [1.0]
    
     def add_input(self,in_neuron,weigth):
@@ -59,15 +59,32 @@ class Neuron:
     def get(self):
         return {self.layer : jnp.array(self.weights)}
 
-def test_1():
+
+def compile_gen2graph(genome):
+    ''' compile your network into FF network '''
+    # I need to make sure that all output neurons are at the same layer
+    ngenomes, cgenomes = genome.node_gen, genome.con_gen
+    neurons = []
+    active_nodes = ngenomes[ngenomes[:,0] != 0.0]
+    for _,node in enumerate(active_nodes):
+        neurons.append(
+            GNeuron(node)
+        )
+
+    for c in cgenomes[cgenomes[:,Genome.enabled] != 0.0]:
+        if int(c[Genome.o])-1 < len(neurons) and int(c[Genome.i])-1 < len(neurons):
+            neurons[int(c[Genome.o])-1].add_input(
+                neurons[int(c[Genome.i])-1],
+                c[Genome.w])
+            
+    return neurons
+
+def test_ff_neat_1():
     INPUT_SIZE = 3
     OUTPUT_SIZE = 2
     payload = jnp.array([1,1,1])
     expected = jnp.array([4.,6.])
 
-    input_values = jnp.array([1.0,1.0,1.0])
-
-    layers = []
     neurons = [
         Neuron(0,0.5,0, NodeTypes.INPUT.value),
         Neuron(1,0.5,0, NodeTypes.INPUT.value),
@@ -93,15 +110,12 @@ def test_1():
     print(expected,result)
     assert jnp.array_equal(expected,result)
 
-def test_2():
+def test_ff_neat_2():
     INPUT_SIZE = 3
     OUTPUT_SIZE = 2
     payload = jnp.array([1,1,1])
     expected = jnp.array([4.,7.5])
 
-    input_values = jnp.array([1.0,1.0,1.0])
-
-    layers = []
     neurons = [
         Neuron(0,0.5,0, NodeTypes.INPUT.value),
         Neuron(1,0.5,0, NodeTypes.INPUT.value),
@@ -128,15 +142,12 @@ def test_2():
     print(expected,result)
     assert jnp.array_equal(expected,result)
 
-def test_3():
+def test_ff_neat_3():
     INPUT_SIZE = 3
     OUTPUT_SIZE = 2
     payload = jnp.array([1,1,1])
     expected = jnp.array([4.5,8.0])
 
-    input_values = jnp.array([1.0,1.0,1.0])
-
-    layers = []
     neurons = [
         Neuron(0,0.5,0, NodeTypes.INPUT.value),
         Neuron(1,0.5,0, NodeTypes.INPUT.value),
@@ -167,13 +178,12 @@ def test_3():
     print(expected,result)
     assert jnp.array_equal(expected,result)
 
-def test_3():
+def test_ff_neat_4():
     INPUT_SIZE = 3
     OUTPUT_SIZE = 2
     payload = jnp.array([1,1,1])
     expected = jnp.array([6.0,8.0])
 
-    layers = []
     neurons = [
         Neuron(0,0.5,0, NodeTypes.INPUT.value),
         Neuron(1,0.5,0, NodeTypes.INPUT.value),
@@ -205,7 +215,98 @@ def test_3():
     print(expected,result)
     assert jnp.array_equal(expected,result)
 
+NUMBER_OF_ACTIATION_FUNCTIONS = 2
+def test_genome_1():
+    innov = 0
+    genome = Genome()
+        
+    index =  1
+    genome.add_node(index,NodeTypes.INPUT,0.0,0)
+    index += 1
+    
+    genome.add_node(index,NodeTypes.OUTPUT,0.0,0)
+    index += 1
+
+    innov = 0
+    innov = genome.add_connection(innov,0,1,0.0)
+
+    print(innov)
+    assert innov == 1
+
+def test_genome_2():
+    innov = 0
+    for _ in range(20):
+        genome = Genome()
+            
+        index =  1
+        genome.add_node(index,NodeTypes.INPUT,0.0,0)
+        index += 1
+        
+        genome.add_node(index,NodeTypes.OUTPUT,0.0,0)
+        index += 1
+
+        innov = 0
+        innov = genome.add_r_connection(innov)
+
+        assert innov == 1
+
+def test_genome_3():    
+    innov = 0
+    for _ in range(20):
+        genome = Genome()
+            
+        index =  1
+        genome.add_node(index,NodeTypes.INPUT,0.0,0)
+        
+        index += 1
+        genome.add_node(index,NodeTypes.OUTPUT,0.0,0)
+
+        innov = 0
+        innov = genome.add_r_connection(innov)
+        
+        innov = genome.add_r_node(innov)
+        innov_to_check = innov
+
+        innov = genome.add_r_connection(innov)
+
+        assert innov == (innov_to_check + 1)
+
+def test_genome_compilation():
+    INPUT_SIZE = 1
+    OUTPUT_SIZE = 1
+    genome = Genome()
+        
+    index =  0
+    genome.add_node(index,NodeTypes.INPUT,0.0,0)
+    
+    index += 1
+    genome.add_node(index,NodeTypes.OUTPUT,0.0,0)
+
+    innov = 0
+    print("here before")
+    innov = genome.add_r_connection(innov)
+    
+    print("here after")
+    innov = genome.add_r_node(innov)
+    innov = genome.add_r_connection(innov)
+    # innov = genome.add_r_connection(innov)
+    # innov = genome.add_r_connection(innov)
+    # innov = genome.add_r_connection(innov)
+    
+    neurons = compile_gen2graph(genome)
+    print([neuron.index for neuron in neurons])
+
+    FF = FeedForward(INPUT_SIZE,OUTPUT_SIZE)
+    FF.add_neurons(neurons)
+
+    # assert innov == (innov_to_check + 1)
+
 if __name__=="__main__":
-    test_1()
-    test_2()
-    test_3()
+    # test_ff_neat_1()
+    # test_ff_neat_2()
+    # test_ff_neat_3()
+    # test_ff_neat_4()
+    # test_genome_1()
+    # test_genome_2()
+    # test_genome_3()
+    test_genome_compilation()

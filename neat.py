@@ -61,6 +61,118 @@ Rnd = StatefulRandomGenerator()
 
 NUMBER_OF_ACTIATION_FUNCTIONS = 6
 
+class Genome:
+
+    i_innov = 0
+    i = 1
+    o = 2
+    w = 3
+    enabled = 4
+
+    n_index = 0
+    n_type = 1
+    n_bias = 2
+    n_act  = 3
+
+    def __init__(self):
+        self.index = 0
+        self.specie = 0
+        self.fitness = 1.0
+        self.max_innov = 0
+        self.nodes_length = 20
+        self.connections_length = 20
+
+        self.con_gen  = jnp.zeros((self.connections_length,5),)
+        self.node_gen = jnp.zeros((self.nodes_length,4),)
+
+    def new_fitness(self,fit : float):
+        ''' Assign new fitness to this genome '''
+        self.fitness = fit
+
+    # TODO: there is problem with correct nodes
+    def add_node(self,index : int, type : NodeTypes, bias : float, act : int):
+        ''' Adding node '''
+        if self.nodes_length <= index:
+            self.nodes_length += 20
+            self.node_gen = jnp.concatenate((self.node_gen,jnp.zeros((20,4),)), axis=0)
+
+        self.node_gen = self.node_gen.at[index].set(jnp.array([index+1,type.value,bias,act]))
+
+    def add_connection(self, innov : int, in_node : int, out_node : int, weight : float):
+        ''' Adding connection '''
+        if self.node_gen[int(in_node)-1,self.n_index] == 0 or self.node_gen[int(in_node)-1,self.n_index] == 0:
+            return innov
+
+        # update innovation if is bigger than current innov of genome
+        for connections in self.con_gen[self.con_gen[:,self.i_innov] != 0]:
+            if out_node+1 == connections[self.i] and in_node+1 == connections[self.o]:
+                return innov
+
+        ## after this point we need to add new connection, before it we can reject it 
+        if self.max_innov < innov:
+            self.max_innov = innov
+
+        if self.connections_length <= innov:
+            self.connections_length += 20
+            self.con_gen = jnp.concatenate((self.con_gen,jnp.zeros((20,6),)), axis=0)
+
+        self.con_gen = self.con_gen.at[innov].set(jnp.array([innov,in_node,out_node,weight,1.0]))
+        innov+=1
+        return innov
+
+    def add_r_connection(self,innov):
+        active_nodes = self.node_gen[self.node_gen[:,self.n_index] != 0]
+        possible_input_nodes  = active_nodes[active_nodes[:,self.n_type] != float(NodeTypes.OUTPUT.value)][:,self.n_index]
+        possible_output_nodes = active_nodes[active_nodes[:,self.n_type] != float(NodeTypes.INPUT.value)][:, self.n_index]
+
+        in_node  = possible_input_nodes[Rnd.randint(max=len(possible_input_nodes))]
+        out_node = possible_output_nodes[Rnd.randint(max=len(possible_output_nodes))]
+        
+        try_it = len(active_nodes)
+        try_counter = 0
+        while in_node == out_node or ((self.con_gen[:,self.i] == in_node) * (self.con_gen[:,self.o] == out_node)).any():
+            out_node = possible_output_nodes[Rnd.randint(max=len(possible_output_nodes))]
+
+            if try_counter > try_it:
+                return innov
+            try_counter+=1
+        innov = self.add_connection(int(innov),int(in_node),int(out_node),1.0)
+        return innov
+
+    def add_r_node(self,innov : int):
+        exisitng_connections = self.con_gen[self.con_gen[:,self.enabled] != 0]
+        
+        chosen_connection = exisitng_connections[Rnd.randint(max=len(exisitng_connections))]
+        self.con_gen = self.con_gen.at[int(chosen_connection[self.i_innov]),self.enabled].set(0.0)
+
+        new_node = len(self.node_gen[self.node_gen[:,self.n_index] != 0]) + 1
+        self.add_node(new_node - 1, NodeTypes.NODE, 0.0, 0)
+
+        in_node  = int(chosen_connection[self.i])
+
+        innov = self.add_connection(innov,
+                            in_node,
+                            int(new_node),
+                            chosen_connection[self.w]
+                        )
+
+        out_node = int(chosen_connection[self.o])
+        innov = self.add_connection(innov,
+                            int(new_node),
+                            out_node,
+                            chosen_connection[self.w]
+                        )
+        return innov
+
+    def change_weigth(self,weigth):
+        self.con_gen = self.con_gen.at[:,self.w].add(weigth)
+        
+    def change_bias(self,bias):
+        self.node_gen = self.node_gen.at[:,self.n_bias].add(bias)
+
+    def change_activation(self,act):
+        self.node_gen = self.node_gen.at[:,self.n_act].set(act)
+
 act2name = {
     0 : "x",
     1 : "sigmoid",
@@ -98,125 +210,6 @@ def activation_func(x,code):
     result = jnp.where(code == 4, softplus(x), result)
     result = jnp.where(code == 5, tanh(x),     result)
     return result
-class Genome:
-
-    i = 2
-    o = 3
-    w = 4
-    enabled = 5
-
-    n_index = 0
-    n_bias = 2
-    n_act  = 3
-
-    def __init__(self):
-        self.index = 0
-        self.specie = 0
-        self.fitness = 1.0
-        self.max_innov = 0
-        self.nodes_length = 20
-        self.connections_length = 20
-
-        self.con_gen  = jnp.zeros((self.connections_length,6),)
-        self.node_gen = jnp.zeros((self.nodes_length,4),)
-
-    def load_genomes(self, con_gen, node_gen):
-        ''' load genome by passing connection genome and node genome '''
-        self.con_gen  = con_gen
-        self.node_gen = node_gen
-        self.max_innov = self.con_gen[self.con_gen[:,0] != 0][-1,0]
-        self.connections_length = len(self.con_gen[self.con_gen[:,0] != 0])
-        self.nodes_length = len(self.node_gen[self.node_gen[:,0] != 0])
-
-    def new_fitness(self,fit : float):
-        ''' Assign new fitness to this genome '''
-        self.fitness = fit
-
-    # TODO: there is problem with correct nodes
-    def add_node(self,index : int, type : NodeTypes, bias : float, act : int):
-        ''' Adding node '''
-        if self.nodes_length <= index:
-            self.nodes_length += 20
-            new_nodes_spaces = jnp.zeros((20,4),)
-            self.node_gen = jnp.concatenate((self.node_gen,new_nodes_spaces), axis=0)
-
-        self.node_gen = self.node_gen.at[index].set(jnp.array([index+1,type.value,bias,act]))
-
-    def add_r_connection(self,innov):
-        active_nodes = self.node_gen[self.node_gen[:,0] != 0]
-        possible_input_nodes  = active_nodes[active_nodes[:,1] != float(NodeTypes.OUTPUT.value)][:,0]
-        possible_output_nodes = active_nodes[active_nodes[:,1] != float(NodeTypes.INPUT.value)][:,0]
-
-        in_node  = possible_input_nodes[Rnd.randint(max=len(possible_input_nodes))]
-        out_node = possible_output_nodes[Rnd.randint(max=len(possible_output_nodes))]
-        while in_node == out_node:
-            out_node = possible_output_nodes[Rnd.randint(max=len(possible_output_nodes))]
-        return self.add_connection(int(innov),int(in_node)-1,int(out_node)-1,1.0)
-
-    def add_r_node(self,innov):
-        innov = int(innov)
-        exisitng_connections = self.con_gen[self.con_gen[:,0] != 0]
-
-        index_of_connection = Rnd.randint(max=len(exisitng_connections)-1)
-        self.con_gen = self.con_gen.at[index_of_connection,self.enabled].set(0.0)
-
-        new_node = len(self.node_gen[self.node_gen[:,self.n_index] != 0]) + 1
-
-        in_node = int(self.con_gen[index_of_connection,self.i])
-        out_node = int(new_node)
-
-        innov = self.add_connection(innov,
-                            in_node-1,
-                            out_node-1,
-                            self.con_gen[index_of_connection,self.w]
-                        )
-
-        in_node = int(new_node)
-        out_node = int(self.con_gen[index_of_connection,self.o])
-        innov = self.add_connection(innov,
-                            in_node-1,
-                            out_node-1,
-                            self.con_gen[index_of_connection,self.w]
-                        )
-        return innov
-
-    def add_connection(self,innov : int,in_node : int, out_node : int, weight : float):
-        ''' Adding connection '''
-        # update innovation if is bigger than current innov of genome
-        for connections in self.con_gen[self.con_gen[:,0] != 0]:
-            if out_node+1 == connections[self.i] and in_node+1 == connections[self.o]:
-                return innov
-
-        ## after this point we need to add new connection, before it we can reject it 
-        innov+=1
-        if self.max_innov < innov:
-            self.max_innov = innov
-
-        if self.connections_length <= innov:
-            self.connections_length += 20
-            new_connections_spaces = jnp.zeros((20,6),)
-            self.con_gen = jnp.concatenate((self.con_gen,new_connections_spaces), axis=0)
-
-        if self.node_gen[int(in_node),self.n_index] == 0:
-            self.add_node(in_node,NodeTypes.NODE,0.0,Rnd.randint(max=NUMBER_OF_ACTIATION_FUNCTIONS,min=0))
-
-        if self.node_gen[int(out_node),self.n_index] == 0:
-            self.add_node(out_node,NodeTypes.NODE,0.0,Rnd.randint(max=NUMBER_OF_ACTIATION_FUNCTIONS,min=0))
-
-        self.con_gen = self.con_gen.at[innov].set(jnp.array([innov,innov,in_node+1,out_node+1,weight,1.0]))
-        return innov
-
-    def change_weigth(self,weigth):
-        print(f"changing weights: {weigth}")
-        print(f"before: {self.con_gen[:,self.w]}")
-        self.con_gen = self.con_gen.at[:,self.w].add(weigth)
-        print(f"changed weights: {self.con_gen[:,self.w]}")
-        
-    def change_bias(self,bias):
-        self.node_gen = self.node_gen.at[:,self.n_bias].add(bias)
-
-    def change_activation(self,act):
-        self.node_gen = self.node_gen.at[:,self.n_act].set(act)
 
 
 # assuming that population is class having con_gens of size N_POPULATION x CREATURE_GENES x All information
@@ -304,7 +297,7 @@ def mate(superior : Genome, inferior : Genome):
     indecies = Rnd.randint_permutations(len(inferior.con_gen[innovation_thresh:])) + innovation_thresh
     offspring.con_gen = offspring.con_gen.at[indecies].set(superior.con_gen[indecies])
     # Lazy but working, copy all nodes not existing in inferior but exisitng in superior
-    offspring.node_gen = offspring.node_gen.at[inferior.node_gen[:,0] == 0].set(superior.node_gen[inferior.node_gen[:,0] == 0])
+    offspring.node_gen = offspring.node_gen.at[inferior.node_gen[:,inferior.index] == 0].set(superior.node_gen[inferior.node_gen[:,inferior.index] == 0])
 
     return offspring
 
@@ -403,7 +396,7 @@ class Neuron:
         self.input_neurons = []
         self.weights = []
         if self.type == NodeTypes.INPUT.value:
-            self.input_list = [self.index]
+            self.input_list = []
             self.weights = [1.0]
    
     def add_input(self,in_neuron,weigth):
@@ -514,7 +507,7 @@ class FeedForward:
     def add_neurons(self,neurons):
         self.max_width = self.INPUT_SIZE
         sorted_neurons = sorted(neurons,key=lambda neuron: neuron.layer)
-        
+        print([(neuron.input_list,neuron.index) for neuron in sorted_neurons])
 
         output_neurons = [neuron for neuron in sorted_neurons if neuron.layer == LAST_LAYER]
         sorted_neurons = [neuron for neuron in sorted_neurons if neuron.layer != LAST_LAYER]
@@ -567,6 +560,11 @@ class FeedForward:
             print(layer.weights)
             print(layer.bias)
 
+class Painter:
+
+    def __init__(self):
+        self.graph = nx.DiGraph()
+
     def __add_edge_to_graph(self,n1,n2,label,thickness):
         # if n1 in self.graph.nodes() and n2 in self.graph.nodes():
         self.graph.add_edge(n1,n2,label=label,thickness=thickness)
@@ -583,56 +581,37 @@ class FeedForward:
                                 label=f"{act2name[int(node.act)]}\nbias: {node.bias:.2f}\nnode: {node.index}")
             nx.set_node_attributes(self.graph, {node.index: (x,0)}, "pos")
         if node.type == NodeTypes.OUTPUT.value:
+            x = x/layer_length + (max_layer - layer_length)/2
             self.graph.add_node(node.index,
                                 color=lightgreen_color,
                                 label=f"{act2name[int(node.act)]}\nbias: {node.bias:.2f}\nnode: {node.index}")
             nx.set_node_attributes(self.graph, {node.index: (x,max_layer+1)}, "pos")
         if node.type == NodeTypes.NODE.value:
+            x = x/layer_length + (max_layer - layer_length)/2
             self.graph.add_node(node.index,
                                 color=skyblue_color,
                                 label=f"{act2name[int(node.act)]}\nbias: {node.bias:.2f}\nnode: {node.index}")
-            x += (node.layer)/10
             nx.set_node_attributes(self.graph, {node.index: (x, node.layer)}, "pos")
 
-    def visualize(self,name):
+    def visualize(self,network,name):
         ''' Visualize graph of current network '''
-        for l_n,l in enumerate(self.layers):
+        for _,l in enumerate(network.layers):
             for x,neuron in enumerate(l.neurons):
                 # print(f"displaying node: {neuron.index}")
-                if neuron.index >= 0:
-                    self.__add_node_to_graph(neuron,x,layer_length=len(l.neurons),max_layer = len(self.layers))
+                self.__add_node_to_graph(neuron,x,layer_length=len(l.neurons),max_layer = len(network.layers))
             
             for neuron in l.neurons:
                 for n_inputs,w in zip(neuron.input_list,neuron.weights):
                     # print(f"displaying connection: {n_inputs} {neuron.index}")
-                    if n_inputs >= 0 and neuron.index >= 0:
-                        self.__add_edge_to_graph(n_inputs, neuron.index, label=f'{w:.2f}',thickness=abs(w))
-
-        # Get weakly connected components
-        components = list(nx.weakly_connected_components(self.graph))
-
-        # Find the largest weakly connected component
-        largest_component = max(components, key=len)
-
-        # Create a subgraph with only the largest weakly connected component
-        largest_subgraph = self.graph.subgraph(largest_component)
-
-        # Filter out isolated nodes
-        isolated_nodes = [node for node in largest_subgraph.nodes() if largest_subgraph.degree(node) == 0]
-        self.graph.remove_nodes_from(isolated_nodes)
+                    self.__add_edge_to_graph(n_inputs, neuron.index, label=f'{w:.2f}',thickness=abs(w))
 
         # Draw the graph with node colors and labels
-        try:
-            pos = {node: self.graph.nodes[node]["pos"] for node in self.graph.nodes()}
-        except Exception as e:
-            print(f"Caught exception: {e}")
-            print({node: self.graph.nodes[node] for node in self.graph.nodes()})
-            return 
         node_colors = [self.graph.nodes[node]["color"] for node in self.graph.nodes()]
-        node_labels = {node: self.graph.nodes[node]["label"] for node in self.graph.nodes()}
         edge_thickness = [nx.get_edge_attributes(self.graph, 'thickness')[edge] for edge in self.graph.edges()]
+
+        pos = nx.spring_layout(self.graph)    
         plt.clf()
-        nx.draw(self.graph, pos, with_labels=True, node_color=node_colors, labels=node_labels, node_size=800, font_size=5, width = edge_thickness)  # Draw nodes
+        nx.draw(self.graph,pos, node_color=node_colors, with_labels=True, font_size=5,edge_color='gray',width=edge_thickness)  # Draw nodes
         plt.savefig(f"models/{name}.png")
         self.graph.clear()
         # plt.show()
@@ -710,21 +689,21 @@ class NEAT:
             self.species.append(0)
             genome.specie = 0
 
-    def load_population(self,file_name):
+    # def load_population(self,file_name):
 
-        __genomes = pickle.load(open(file_name,"rb"))
-        ngenom = __genomes["nodes"]
-        cgenom = __genomes["connect"]
+    #     __genomes = pickle.load(open(file_name,"rb"))
+    #     ngenom = __genomes["nodes"]
+    #     cgenom = __genomes["connect"]
 
-        self.population = []
-        for _ in range(self.population_size):
-            genome = Genome()
-            genome.load_genomes(cgenom,ngenom)
-            self.population.append(genome)
+    #     self.population = []
+    #     for _ in range(self.population_size):
+    #         genome = Genome()
+    #         genome.load_genomes(cgenom,ngenom)
+    #         self.population.append(genome)
 
     def mutate_activation(self,amc = 0.7):
         for genome in self.population:
-            length = len(genome.node_gen[:,0])
+            length = len(genome.node_gen[:,genome.index])
             genome.change_activation(
                 Rnd.randint(NUMBER_OF_ACTIATION_FUNCTIONS,0) *
                 Rnd.binary(p = amc,shape=(length,))
@@ -732,7 +711,7 @@ class NEAT:
 
     def mutate_weight(self,epsylon = 0.1,wmc = 0.7):
         for genome in self.population:
-            length = len(genome.con_gen[:,0])
+            length = len(genome.con_gen[:,genome.i_innov])
             genome.change_weigth(
                 Rnd.uniform(max=epsylon,min=-epsylon,shape=(length,)) *
                 Rnd.binary(p = wmc,shape=(length,))
@@ -740,7 +719,7 @@ class NEAT:
 
     def mutate_bias(self,epsylon = 0.1,bmc = 0.7):
         for genome in self.population:
-            length = len(genome.node_gen[:,0])
+            length = len(genome.node_gen[:,genome.index])
             genome.change_bias(
                 Rnd.uniform(epsylon,-epsylon,shape=(length,)) *
                 Rnd.binary(p = bmc,shape=(length,))
@@ -796,7 +775,7 @@ class NEAT:
                 "specienumber" : genome.specie,
                 "fitness" : genome.fitness,
                 "connections" : len(genome.con_gen[genome.con_gen[:,genome.enabled] != 0]),
-                "nodes" : len(genome.node_gen[genome.node_gen[:,0] != 0]),
+                "nodes" : len(genome.node_gen[genome.node_gen[:,genome.index] != 0]),
                 "nmc" : self.nmc,
                 "cmc" : self.cmc,
                 "wmc" : self.wmc,

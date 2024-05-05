@@ -12,6 +12,7 @@ import os
 
 parser = argparse.ArgumentParser(description='Description of your program')
 parser.add_argument('--input_file', '-i', type=str, default='', help='Input file path')
+parser.add_argument('--epoch', '-e', type=int, default=0, help='Starting epoch number')
 
 N = 20
 GENERATIONS = 100
@@ -55,12 +56,14 @@ def main():
                     N = N,
                     δ_th = δ_th)
 
+    starting_epoch = args.epoch
+
     models_path = "models"
 
     oldEnv = slimevolleygym.SlimeVolleyEnv()
     oldEnv.survival_bonus = True
 
-    for e in range(GENERATIONS):
+    for e in range(starting_epoch,starting_epoch + GENERATIONS, 1):
         all_rewards = []
 
         my_neat = mutate(my_neat)
