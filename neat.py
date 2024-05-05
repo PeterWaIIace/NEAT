@@ -13,7 +13,7 @@ import matplotlib.colors as mcolors
 
 from jax import jit
 from enum import Enum
-from arrayPainter import display_array, display_array
+from arrayPainter import display_array, display_with_values
 # First networkx library is imported  
 # along with matplotlib 
 
@@ -114,7 +114,7 @@ class Genome:
 
         if self.connections_length <= innov:
             self.connections_length += 20
-            self.con_gen = jnp.concatenate((self.con_gen,jnp.zeros((20,6),)), axis=0)
+            self.con_gen = jnp.concatenate((self.con_gen,jnp.zeros((20,5),)), axis=0)
 
         self.con_gen = self.con_gen.at[innov].set(jnp.array([innov,in_node,out_node,weight,1.0]))
         innov+=1
@@ -128,7 +128,7 @@ class Genome:
         in_node  = possible_input_nodes[Rnd.randint(max=len(possible_input_nodes))]
         out_node = possible_output_nodes[Rnd.randint(max=len(possible_output_nodes))]
         
-        try_it = len(active_nodes)
+        try_it = len(active_nodes)*5
         try_counter = 0
         while in_node == out_node or ((self.con_gen[:,self.i] == in_node) * (self.con_gen[:,self.o] == out_node)).any():
             out_node = possible_output_nodes[Rnd.randint(max=len(possible_output_nodes))]
@@ -136,6 +136,7 @@ class Genome:
             if try_counter > try_it:
                 return innov
             try_counter+=1
+
         innov = self.add_connection(int(innov),int(in_node),int(out_node),1.0)
         return innov
 
@@ -364,12 +365,13 @@ def compiler(genome,input_size):
     # I need to make sure that all output neurons are at the same layer
     ngenomes, cgenomes = genome.node_gen, genome.con_gen
     neurons = []
-    active_nodes = ngenomes[ngenomes[:,0] != 0.0]
+    active_nodes = ngenomes[ngenomes[:,Genome.n_index] != 0.0]
     for _,node in enumerate(active_nodes):
         neurons.append(
             Neuron(node)
         )
 
+    # TODO: here is an error
     for c in cgenomes[cgenomes[:,Genome.enabled] != 0.0]:
         if int(c[Genome.o])-1 < len(neurons) and int(c[Genome.i])-1 < len(neurons):
             neurons[int(c[Genome.o])-1].add_input(
@@ -456,7 +458,7 @@ class Layer:
                 self.input_size = 1
             tmp_weights = jnp.zeros((self.input_size,len(self.neurons)))
             if self.residual_connection.shape != (0,0):
-                weights    = jnp.concatenate((self.residual_connection, tmp_weights), axis=1)
+                weights  = jnp.concatenate((self.residual_connection, tmp_weights), axis=1)
             else:
                 weights = tmp_weights
             self.bias = jnp.zeros((self.width))
@@ -470,7 +472,7 @@ class Layer:
                 column = jnp.zeros((self.input_size))
                 inputs = jnp.array([in_neuron.in_layer for in_neuron in neuron.input_neurons],dtype=jnp.int32)
                 n_weights = jnp.array(neuron.weights)
-                
+        
                 column = column.at[inputs].set(n_weights)
                 if last == True:
                     weights = weights.at[:,n].set(column)
@@ -507,7 +509,6 @@ class FeedForward:
     def add_neurons(self,neurons):
         self.max_width = self.INPUT_SIZE
         sorted_neurons = sorted(neurons,key=lambda neuron: neuron.layer)
-        print([(neuron.input_list,neuron.index) for neuron in sorted_neurons])
 
         output_neurons = [neuron for neuron in sorted_neurons if neuron.layer == LAST_LAYER]
         sorted_neurons = [neuron for neuron in sorted_neurons if neuron.layer != LAST_LAYER]
@@ -684,7 +685,9 @@ class NEAT:
             creation_innov = 0
             for i in range(self.inputs):
                 for o in range(self.outputs):
-                    creation_innov = self.population[n].add_connection(creation_innov,i,output_offset+o,0.0)
+                    in_node = self.population[n].node_gen[i,Genome.n_index]
+                    out_node = self.population[n].node_gen[output_offset+o,Genome.n_index]
+                    creation_innov = self.population[n].add_connection(creation_innov,in_node,out_node,0.0)
                     self.innov = creation_innov
             self.species.append(0)
             genome.specie = 0

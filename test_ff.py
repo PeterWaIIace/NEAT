@@ -10,7 +10,7 @@ import csv
 import sys
 import os
 
-from neat import FeedForward, NodeTypes, Genome, Neuron as GNeuron
+from neat import FeedForward, NodeTypes, Genome, NEAT , Neuron as GNeuron
 from enum import Enum
 
 N = 10
@@ -220,7 +220,7 @@ def test_genome_1():
     innov = 0
     genome = Genome()
         
-    index =  1
+    index =  0
     genome.add_node(index,NodeTypes.INPUT,0.0,0)
     index += 1
     
@@ -228,7 +228,9 @@ def test_genome_1():
     index += 1
 
     innov = 0
-    innov = genome.add_connection(innov,0,1,0.0)
+    in_node = genome.node_gen[0,Genome.n_index]
+    out_node = genome.node_gen[1,Genome.n_index]
+    innov = genome.add_connection(innov,in_node,out_node,0.0)
 
     print(innov)
     assert innov == 1
@@ -255,7 +257,7 @@ def test_genome_3():
     for _ in range(20):
         genome = Genome()
             
-        index =  1
+        index =  0
         genome.add_node(index,NodeTypes.INPUT,0.0,0)
         
         index += 1
@@ -269,7 +271,30 @@ def test_genome_3():
 
         innov = genome.add_r_connection(innov)
 
-        assert innov == (innov_to_check + 1)
+        assert innov == innov_to_check
+
+def test_genome_4():
+    innov = 0
+    genome = Genome()
+        
+    index =  0
+    genome.add_node(index,NodeTypes.INPUT,0.0,0)
+    
+    index += 1
+    genome.add_node(index,NodeTypes.OUTPUT,0.0,0)
+
+    innov = 0
+    innov = genome.add_r_connection(innov)
+
+    innov = genome.add_r_node(innov)
+    innov = genome.add_r_node(innov)
+    innov_to_check = innov
+    neurons = compile_gen2graph(genome)
+
+    innov = genome.add_r_connection(innov)
+    neurons = compile_gen2graph(genome)
+
+    assert innov == innov_to_check + 1
 
 def test_genome_compilation():
     INPUT_SIZE = 1
@@ -283,15 +308,10 @@ def test_genome_compilation():
     genome.add_node(index,NodeTypes.OUTPUT,0.0,0)
 
     innov = 0
-    print("here before")
     innov = genome.add_r_connection(innov)
     
-    print("here after")
     innov = genome.add_r_node(innov)
     innov = genome.add_r_connection(innov)
-    # innov = genome.add_r_connection(innov)
-    # innov = genome.add_r_connection(innov)
-    # innov = genome.add_r_connection(innov)
     
     neurons = compile_gen2graph(genome)
     print([neuron.index for neuron in neurons])
@@ -301,12 +321,29 @@ def test_genome_compilation():
 
     # assert innov == (innov_to_check + 1)
 
+def test_neat_compilation():
+
+    my_neat = NEAT(12,3,1,
+            nmc = 0.5,
+            cmc = 0.5,
+            wmc = 0.5,
+            bmc = 0.5,
+            amc = 0.5,
+            N = N,
+            δ_th = δ_th)
+    networks = my_neat.evaluate()
+    neurons = compile_gen2graph(networks[0].genome)
+    print([(neuron.input_list,neuron.index) for neuron in neurons])
+
+
 if __name__=="__main__":
-    # test_ff_neat_1()
-    # test_ff_neat_2()
-    # test_ff_neat_3()
-    # test_ff_neat_4()
-    # test_genome_1()
-    # test_genome_2()
-    # test_genome_3()
+    test_ff_neat_1()
+    test_ff_neat_2()
+    test_ff_neat_3()
+    test_ff_neat_4()
+    test_genome_1()
+    test_genome_2()
+    test_genome_3()
+    test_genome_4()
     test_genome_compilation()
+    test_neat_compilation()
