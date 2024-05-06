@@ -52,6 +52,16 @@ class Genome:
         self.connections = jnp.zeros((self.CHUNK,self.CONNECTION_SIZE),)
         self.nodes = jnp.zeros((self.CHUNK,self.NODE_SIZE),)
 
+    def check_against(self,genome):
+        ''' check agaisnt other genome and make them length equal if longer'''
+        if len(genome.connections) > len(self.connections):
+            diff = len(genome.connections) - len(self.connections)
+            self.connections = jnp.concatenate((self.connections,jnp.zeros((diff,self.CONNECTION_SIZE),)), axis=0)
+
+        if len(genome.nodes) > len(self.nodes):
+            diff = len(genome.nodes) - len(self.nodes)
+            self.nodes = jnp.concatenate((self.nodes,jnp.zeros((diff,self.NODE_SIZE),)), axis=0)
+
     def __conn_exists(self,in_node,out_node):
 
         forward_connection = ((self.connections[:,self.C_IN] == in_node) * (self.connections[:,self.C_IN] == out_node)).any()  
@@ -77,7 +87,7 @@ class Genome:
         new_node_index = len(self.nodes[self.nodes[:,self.N_EN] != 0.0])
 
         if len(self.nodes) <= new_node_index:
-            self.nodes = jnp.concatenate((self.nodes,jnp.zeros((self.CHUNK,self.CONNECTION_SIZE),)), axis=0)
+            self.nodes = jnp.concatenate((self.nodes,jnp.zeros((self.CHUNK,self.NODE_SIZE),)), axis=0)
 
         enabled = 1
         new_node_values = jnp.array([new_node_index,type,bias,act,enabled])
@@ -259,6 +269,9 @@ def speciate(population, δ_th = 5, **kwargs) -> list:
 def mate(superior : Genome, inferior : Genome):
     ''' mate superior Genome with inferior Genome '''
     # check smaller innovation number:
+    superior.check_against(inferior)
+    inferior.check_against(superior)
+
     innovation_thresh = superior.max_innov if superior.max_innov < inferior.max_innov else inferior.max_innov
 
     offspring = copy.deepcopy(inferior)
@@ -282,8 +295,6 @@ def cross_over(population : list, population_size : int = 0, keep_top : int = 2,
         population_size = len(population)
     else:
         population_diff = population_size - len(population)
-        print(f"[DEBUG] population_diff: {population_diff}")
-
 
     keep_top = int(keep_top)
     if keep_top < 2:
@@ -424,7 +435,6 @@ class Layer:
         self.input_size = input_size
         self.neurons = []
         self.neurons_index_offset = 0
-        # self.vmap_activate = jax.vmap(activation_func)
 
     def update_size(self,input_size):
         self.input_size = input_size
@@ -460,7 +470,7 @@ class Layer:
             self.bias = jnp.zeros((self.width))
             self.acts = jnp.zeros((self.width),dtype=jnp.int32)
             
-        display_array([weights,self.bias],["blue","green"])
+        # display_array([weights,self.bias],["blue","green"])
 
         for n,neuron in enumerate(self.neurons):
             # update all neurons indexes based on offset in this layer
@@ -487,7 +497,7 @@ class Layer:
         if self.index == 0:
             self.weights = self.weights.T
 
-        display_array([weights,self.bias],["blue","green"])
+        # display_array([weights,self.bias],["blue","green"])
 
         return self.bias.shape[0]
     
@@ -544,9 +554,9 @@ class FeedForward:
 
     def activate(self,x):
         output_values = x
-        print("==============================================")
+        # print("==============================================")
         for layer in self.layers:
-            display_array([output_values,layer.weights,layer.bias],["blue","red","green"])
+            # display_array([output_values,layer.weights,layer.bias],["blue","red","green"])
             output_values = jnp.dot(output_values,layer.weights) + layer.bias
             output_values = activation_func(output_values,layer.acts)
         return output_values

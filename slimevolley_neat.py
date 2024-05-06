@@ -6,15 +6,13 @@ import numpy as np
 import argparse
 import pickle 
 import time
-import csv
-import sys
-import os
 
 parser = argparse.ArgumentParser(description='Description of your program')
 parser.add_argument('--input_file', '-i', type=str, default='', help='Input file path')
 parser.add_argument('--epoch', '-e', type=int, default=0, help='Starting epoch number')
 
 N = 20
+MATCHES = 3
 GENERATIONS = 100
 POPULATION_SIZE = 20
 NMC = 0.5
@@ -74,23 +72,24 @@ def main():
         for n,network in enumerate(networks):
             start_time = time.time()
             
-            observation = oldEnv.reset()
-            done = False
             total_reward = 0
-            while not done:
-                
-                actions = np.array(network.activate(observation))
-                # take biggest value index and make it action performed
-                action_t = [0] * 3
-                actions[actions < 0.0] = 0.0
-                if np.sum(actions) != 0:
-                    action_t[np.argmax(actions)] = 1
-                observation, reward, done, info = oldEnv.step(action_t)
-                total_reward += reward
-                if RENDER_HUMAN:
-                    oldEnv.render()
+            for _ in range(MATCHES):
+                observation = oldEnv.reset()
+                done = False       
+                while not done:
+                    
+                    actions = np.array(network.activate(observation))
+                    # take biggest value index and make it action performed
+                    action_t = [0] * 3
+                    actions[actions < 0.0] = 0.0
+                    if np.sum(actions) != 0:
+                        action_t[np.argmax(actions)] = 1
+                    observation, reward, done, info = oldEnv.step(action_t)
+                    total_reward += reward
+                    if RENDER_HUMAN:
+                        oldEnv.render()
 
-            all_rewards.append(total_reward)
+            all_rewards.append(total_reward/MATCHES)
     
             total_elapsed_time += time.time() - start_time
     
@@ -100,7 +99,6 @@ def main():
         print(f"Average fitness: {avg_fitness} total_elapsed_time: {total_elapsed_time/len(all_rewards)}")
         pickle.dump(my_neat,open(f"{models_path}/neat_epoch_{e}_{GENERATIONS}_{POPULATION_SIZE}.model","bw"))
 
-    loaded_neat = pickle.load(open("neat.model","br"))
 
     oldEnv.close()
 
