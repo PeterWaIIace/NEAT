@@ -404,7 +404,7 @@ if __name__=="__main__":
     pos = nx.spring_layout(G)  # Layout for better visualization
     node_colors = [G.nodes[n]["color"] for n in G.nodes]
     nx.draw(G, pos, with_labels=True, node_size=1000, node_color=node_colors, font_size=12, font_weight="bold")
-    # plt.ion()
+    plt.ion()
     plt.show()
     FF = compiler(nodes,12,g)
 

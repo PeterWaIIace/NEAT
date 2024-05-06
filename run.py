@@ -12,7 +12,7 @@ def get_action():
         return 0  # Apply no force
 
 if __name__ == "__main__":
-    env = gym.make("Acrobot-v1", render_mode="human")
+    env = gym.make("CartPole-v1", render_mode="human")
 
     pygame.init()
     screen = pygame.display.set_mode((600, 400))

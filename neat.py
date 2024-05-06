@@ -361,11 +361,46 @@ class Node:
             self.layer = LAST_LAYER
 
     def add_input(self,input_node, input_weight):
-        self.weights.append(input_weight)
-        self.inputs.append(input_node)
-        for node in self.inputs:
-            if node.layer >= self.layer:
-                self.layer = node.layer + 1
+        if input_node not in self.inputs:
+            self.weights.append(input_weight)
+            self.inputs.append(input_node)
+            for node in self.inputs:
+                if node.layer >= self.layer:
+                    self.layer = node.layer + 1
+
+    def rm_input(self,input_node):
+        index = self.inputs.index(input_node)
+        self.weights.pop(index)
+        self.inputs.pop(index)
+
+
+def graph(nodes,n):
+    # Create a directed graph
+    G = nx.DiGraph()
+
+    # Add nodes to the graph
+    node_color_map = {NodeTypes.INPUT.value: "skyblue", NodeTypes.NODE.value: "lightgreen", NodeTypes.OUTPUT.value: "salmon"}
+    for node in nodes:
+        index = int(node.index)
+        G.add_node(index, color=node_color_map[int(node.type)])
+
+    # Add edges to the graph based on inputs
+    for node in nodes:
+        for input in node.inputs:
+            index = int(node.index)
+            input = int(input.index)
+            G.add_edge(input, index)
+    
+    # Draw the graph
+    pos = nx.spring_layout(G)  # Layout for better visualization
+    node_colors = [G.nodes[i]["color"] for i in G.nodes]
+    plt.ion()
+    plt.figure(n)
+    plt.cla()
+    nx.draw(G, pos, with_labels=True, node_size=1000, node_color=node_colors, font_size=12, font_weight="bold")
+    plt.show()
+    plt.pause(0.01)
+
 
 def grapprocessor(genome):
     ''' compile your network into FF network '''
@@ -390,6 +425,21 @@ def grapprocessor(genome):
             c[Genome.C_W]
         )
 
+    used_nodes = []
+    for node in nodes:
+        if len(node.inputs) > 0 or node.type == NodeTypes.INPUT.value:
+            used_nodes.append(node)
+    nodes = used_nodes
+
+    for node in used_nodes:
+        nodes_to_remove = []
+        for input in node.inputs:
+            if input not in used_nodes:
+                nodes_to_remove.append(input)
+        
+        for rm_node in nodes_to_remove:
+            node.rm_input(rm_node)
+            
     # nodes = topologicalSort(nodes)
     return nodes
 
@@ -481,6 +531,7 @@ class Layer:
                 inputs = jnp.array([in_neuron.in_layer for in_neuron in neuron.inputs],dtype=jnp.int32)
                 n_weights = jnp.array(neuron.weights)
                 
+                # display_array([weights,column,inputs],["purple","yellow","orange"])
                 column = column.at[inputs].set(n_weights)
                 if last == True:
                     weights = weights.at[:,n].set(column)
@@ -710,8 +761,10 @@ class NEAT:
     def evaluate(self):
         ''' function for evaluating genomes into ff networks '''
         networks = []
-        for genome in self.population:
-            networks.append(compiler(grapprocessor(genome),self.inputs,genome))
+        for n,genome in enumerate(self.population):
+            nodes = grapprocessor(genome)
+            # graph(nodes,n)
+            networks.append(compiler(nodes,self.inputs,genome))
         return networks
 
     def update(self,fitness):
