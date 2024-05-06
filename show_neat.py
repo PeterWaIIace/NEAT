@@ -1,4 +1,4 @@
-from neat import NEAT, Painter
+from neat import NEAT, Painter, Genome, Neuron
 import jax.numpy as jnp
 import numpy as np
 import argparse
@@ -20,17 +20,24 @@ MUTATE_RATE = 4
 RENDER_HUMAN = True
 epsylon = 0.2
 
-def mutate(neat):
-    # EVOLVE EVERYTHING
-    neat.cross_over(keep_top = 4,δ_th = δ_th, N = N)
-    neat.mutate_weight(epsylon = epsylon,wmc=WMC)
-    neat.mutate_bias(epsylon = epsylon,bmc=BMC)
-    for _ in range(MUTATE_RATE):
-        neat.mutate_activation(amc=AMC)
-        neat.mutate_nodes(nmc=NMC)
-        neat.mutate_connections(cmc=CMC)
-    return neat
-    
+def compile_gen2graph(genome):
+    ''' compile your network into FF network '''
+    # I need to make sure that all output neurons are at the same layer
+    ngenomes, cgenomes = genome.node_gen, genome.con_gen
+    neurons = []
+    active_nodes = ngenomes[ngenomes[:,0] != 0.0]
+    for _,node in enumerate(active_nodes):
+        neurons.append(
+            Neuron(node)
+        )
+
+    for c in cgenomes[cgenomes[:,Genome.enabled] != 0.0]:
+        if int(c[Genome.o])-1 < len(neurons) and int(c[Genome.i])-1 < len(neurons):
+            neurons[int(c[Genome.o])-1].add_input(
+                neurons[int(c[Genome.i])-1],
+                c[Genome.w])
+            
+    return neurons
 
 def main():
     args = parser.parse_args()
@@ -40,6 +47,8 @@ def main():
         my_neat = pickle.load(open(args.input_file,"br"))
         painter = Painter()
         for n,network in enumerate(my_neat.evaluate()):
+            neurons = compile_gen2graph(network.genome)
+            print([(neuron.input_list,neuron.index) for neuron in neurons])
             painter.visualize(network,f"graphs/network_{n}")
 
 if __name__=="__main__":
