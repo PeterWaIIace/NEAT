@@ -15,19 +15,19 @@ N = 20
 MATCHES = 3
 GENERATIONS = 100
 POPULATION_SIZE = 20
-NMC = 0.5
-CMC = 0.5
-WMC = 0.5
-BMC = 0.5
-AMC = 0.5
+NMC = 0.8
+CMC = 0.8
+WMC = 0.8
+BMC = 0.8
+AMC = 0.8
 δ_th = 5
-MUTATE_RATE = 4
+MUTATE_RATE = 1
 RENDER_HUMAN = True
 epsylon = 0.2
 
 def mutate(neat):
     # EVOLVE EVERYTHING
-    neat.cross_over(keep_top = 4,δ_th = δ_th, N = N)
+    neat.cross_over(δ_th = δ_th, N = N)
     neat.mutate_weight(epsylon = epsylon,wmc=WMC)
     neat.mutate_bias(epsylon = epsylon,bmc=BMC)
     for _ in range(MUTATE_RATE):
@@ -46,6 +46,7 @@ def main():
         my_neat = pickle.load(open(args.input_file,"br"))
     else:
         my_neat = NEAT(12,3,POPULATION_SIZE,
+                    keep_top = 4,
                     nmc = 0.5,
                     cmc = 0.5,
                     wmc = 0.5,
@@ -90,13 +91,16 @@ def main():
                         oldEnv.render()
 
             all_rewards.append(total_reward/MATCHES)
+            print(f"network: {n} reward: {total_reward/MATCHES} elapsed time: {time.time() - start_time}s")
     
             total_elapsed_time += time.time() - start_time
     
         my_neat.update(all_rewards)
         
         avg_fitness = np.sum(all_rewards)/len(all_rewards)
-        print(f"Average fitness: {avg_fitness} total_elapsed_time: {total_elapsed_time/len(all_rewards)}")
+        green = '\033[92m'
+        reset = '\033[0m'
+        print(f"{green}Average fitness: {avg_fitness} total_elapsed_time: {total_elapsed_time/len(all_rewards)}s{reset}")
         pickle.dump(my_neat,open(f"{models_path}/neat_epoch_{e}_{GENERATIONS}_{POPULATION_SIZE}.model","bw"))
 
 

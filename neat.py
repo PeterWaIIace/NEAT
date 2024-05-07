@@ -621,11 +621,12 @@ class FeedForward:
 
 class NEAT:
 
-    def __init__(self,inputs=2, outputs=1, population_size = 10, 
-                nmc = 0.7, 
-                cmc = 0.7, 
-                wmc = 0.7, 
-                bmc = 0.7, 
+    def __init__(self,inputs=2, outputs=1, population_size = 10,
+                keep_top = 2,
+                nmc = 0.7,
+                cmc = 0.7,
+                wmc = 0.7,
+                bmc = 0.7,
                 amc = 0.7,
                 C1 = 1.0,
                 C2 = 1.0,
@@ -655,6 +656,7 @@ class NEAT:
         self.population = []
         self.species = []
 
+        self.keep_top = keep_top 
         self.nmc = nmc# node mutation chance
         self.cmc = cmc# connection mutation chance
         self.wmc = wmc# weight mutation chance
@@ -692,20 +694,8 @@ class NEAT:
             self.species.append(0)
             genome.specie = 0
 
-    # def load_population(self,file_name):
-
-    #     __genomes = pickle.load(open(file_name,"rb"))
-    #     ngenom = __genomes["nodes"]
-    #     cgenom = __genomes["connect"]
-
-    #     self.population = []
-    #     for _ in range(self.population_size):
-    #         genome = Genome()
-    #         genome.load_genomes(cgenom,ngenom)
-    #         self.population.append(genome)
-
     def mutate_activation(self,amc = 0.7):
-        for genome in self.population:
+        for genome in self.population[self.keep_top:]:
             length = len(genome.nodes[:,genome.index])
             genome.change_activation(
                 Rnd.randint(NUMBER_OF_ACTIATION_FUNCTIONS,0) *
@@ -713,7 +703,7 @@ class NEAT:
             )
 
     def mutate_weight(self,epsylon = 0.1,wmc = 0.7):
-        for genome in self.population:
+        for genome in self.population[self.keep_top:]:
             length = len(genome.connections[:,genome.C_INNOV])
             genome.change_weigth(
                 Rnd.uniform(max=epsylon,min=-epsylon,shape=(length,)) *
@@ -721,7 +711,7 @@ class NEAT:
             )
 
     def mutate_bias(self,epsylon = 0.1,bmc = 0.7):
-        for genome in self.population:
+        for genome in self.population[self.keep_top:]:
             length = len(genome.nodes[:,genome.index])
             genome.change_bias(
                 Rnd.uniform(epsylon,-epsylon,shape=(length,)) *
@@ -729,21 +719,21 @@ class NEAT:
             )
 
     def mutate_nodes(self,nmc = 0.7):
-        for genome in self.population:
+        for genome in self.population[self.keep_top:]:
             mutation_chance = random.randint(0,10)
             if mutation_chance > nmc*10:
                 self.innov = genome.add_r_node(self.innov)
 
     def mutate_connections(self,cmc = 0.7):
-        for genome in self.population:
+        for genome in self.population[self.keep_top:]:
             mutation_chance = random.randint(0,10)
             if mutation_chance  > cmc*10:
                 self.innov = genome.add_r_connection(self.innov)
 
-    def cross_over(self,keep_top = 2, δ_th = 5, c1 = 1.0, c2 = 1.0, c3 = 1.0, N = 1.0):
+    def cross_over(self,δ_th = 5, c1 = 1.0, c2 = 1.0, c3 = 1.0, N = 1.0):
         print(f"[CROSS_OVER]{len(self.population)}")
         self.population, self.species = cross_over(self.population,
-                keep_top = keep_top,
+                keep_top = self.keep_top,
                 population_size = self.population_size,
                 δ_th = δ_th,
                 c1 = c1,

@@ -13,13 +13,13 @@ N = 20
 MATCHES = 3
 GENERATIONS = 100
 POPULATION_SIZE = 20
-NMC = 0.5
-CMC = 0.5
-WMC = 0.5
-BMC = 0.5
-AMC = 0.5
+NMC = 0.9
+CMC = 0.9
+WMC = 0.9
+BMC = 0.9
+AMC = 0.9
 δ_th = 5
-MUTATE_RATE = 4
+MUTATE_RATE = 1
 RENDER_HUMAN = True
 epsylon = 0.2
 
@@ -28,7 +28,7 @@ OUTPUT_SIZE = 2
 
 def mutate(neat):
     # EVOLVE EVERYTHING
-    neat.cross_over(keep_top = 4,δ_th = δ_th, N = N)
+    neat.cross_over(δ_th = δ_th, N = N)
     neat.mutate_weight(epsylon = epsylon,wmc=WMC)
     neat.mutate_bias(epsylon = epsylon,bmc=BMC)
     for _ in range(MUTATE_RATE):
@@ -49,6 +49,7 @@ def main():
         my_neat = NEAT(INPUT_SIZE,
                        OUTPUT_SIZE,
                        POPULATION_SIZE,
+                    keep_top = 4,
                     nmc = 0.5,
                     cmc = 0.5,
                     wmc = 0.5,
@@ -88,7 +89,7 @@ def main():
 
             all_rewards.append(total_reward)
             total_elapsed_time += time.time() - start_time
-            print(f"network: {n} reward: {reward} total_elapsed_time: {total_elapsed_time}s")
+            print(f"network: {n} reward: {total_reward} elapsed time: {time.time() - start_time}s")
     
         my_neat.update(all_rewards)
         
