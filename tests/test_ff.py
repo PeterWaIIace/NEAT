@@ -10,7 +10,7 @@ import csv
 import sys
 import os
 
-from neat import FeedForward, NodeTypes, Genome, NEAT , Neuron as GNeuron
+from src.neat import FeedForward, NodeTypes, Genome, NEAT , Neuron as GNeuron
 from enum import Enum
 
 N = 10

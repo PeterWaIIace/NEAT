@@ -1,11 +1,16 @@
 import gymnasium as gym
 import slimevolleygym
-from neat import NEAT
-import jax.numpy as jnp
 import numpy as np
 import argparse
 import pickle 
 import time
+
+import sys
+import os
+
+dir_path = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(f'{dir_path}/..')
+from src.neat import NEAT, Painter, Genome, Neuron
 
 parser = argparse.ArgumentParser(description='Description of your program')
 parser.add_argument('--input_file', '-i', type=str, default='', help='Input file path')
@@ -86,7 +91,7 @@ def main():
                     if np.sum(actions) != 0:
                         action_t[np.argmax(actions)] = 1
                     observation, reward, done, info = oldEnv.step(action_t)
-                    total_reward += reward
+                    total_reward += reward + ()
                     if RENDER_HUMAN:
                         oldEnv.render()
 

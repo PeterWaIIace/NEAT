@@ -1,4 +1,4 @@
-from neat import  NodeTypes, FeedForward
+from src.neat import  NodeTypes, FeedForward
 import jax.numpy as jnp
 
 LAST_LAYER = 0xDEADBEEF

@@ -13,17 +13,17 @@ Results roughly after **30 epochs**:
 You can run experiment by using:
 
 ```
-python3 cartpole.py
+python3 exmaples/cartpole.py
 ```
 
 or 
 ```
-python3 pendulum.py
+python3 exmaples/pendulum.py
 ```
 
 or
 ```
-python3 mountaincar.py
+python3 exmaples/mountaincar.py
 ```
 
 Cart pole is the easiest one for this one, so it should learn quite quickly. A lot depends also on fitness functions so you may want adjust it for your own experimetns.

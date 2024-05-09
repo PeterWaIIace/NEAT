@@ -1,9 +1,14 @@
 import gymnasium as gym
-from neat import NEAT
 import numpy as np
 import argparse
 import pickle 
 import time
+import sys
+import os
+
+dir_path = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(f'{dir_path}/..')
+from src.neat import NEAT
 
 parser = argparse.ArgumentParser(description='Description of your program')
 parser.add_argument('--input_file', '-i', type=str, default='', help='Input file path')
