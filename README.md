@@ -1,4 +1,4 @@
-License: MIT - 2024.05.09
+License: MIT - 09.05.2024 (DD/MM/YYYY)
 
 # NEAT
 
