@@ -4,7 +4,7 @@ This is implementation of Neural Evolution of Augmenting Topologies using JAX, b
 
 Repository may be a bit of mess, but all main code is in `neat.py`. 
 
-
+<img src="https://github.com/PeterWaIIace/NEAT/assets/40773550/bfd5e541-8f94-4f12-adaf-7091146ba21c" width="300" height="200">
 
 ### CODE:
 You can run experiment by using:
