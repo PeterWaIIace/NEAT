@@ -418,28 +418,36 @@ def grapprocessor(genome):
             )
         )
 
-    # TODO: here is an error
     for c in cgenomes[cgenomes[:,Genome.enabled] != 0.0]:
         nodes[int(c[Genome.C_OUT])].add_input(
             nodes[int(c[Genome.C_IN])],
             c[Genome.C_W]
         )
 
-    used_nodes = []
-    for node in nodes:
-        if len(node.inputs) > 0 or node.type == NodeTypes.INPUT.value:
-            used_nodes.append(node)
-    nodes = used_nodes
+    changes = True
+    while changes:
+        changes = False
+        used_nodes = []
+        for node in nodes:
+            if len(node.inputs) > 0 or node.type != NodeTypes.NODE.value:
+                used_nodes.append(node)
+            else:
+                changes = True
+        nodes = used_nodes
 
-    for node in used_nodes:
-        nodes_to_remove = []
-        for input in node.inputs:
-            if input not in used_nodes:
-                nodes_to_remove.append(input)
-        
-        for rm_node in nodes_to_remove:
-            node.rm_input(rm_node)
+        for node in used_nodes:
+            nodes_to_remove = []
+            for input in node.inputs:
+                if input not in used_nodes:
+                    nodes_to_remove.append(input)
             
+            for rm_node in nodes_to_remove:
+                node.rm_input(rm_node)
+                changes = True
+
+        # for node in used_nodes:
+        #     print(f"{[int(input.index) for input in node.inputs],int(node.index)}")
+        # print("-----------")
     # nodes = topologicalSort(nodes)
     return nodes
 
@@ -753,7 +761,7 @@ class NEAT:
         networks = []
         for n,genome in enumerate(self.population):
             nodes = grapprocessor(genome)
-            # graph(nodes,n)
+            graph(nodes,n)
             networks.append(compiler(nodes,self.inputs,genome))
         return networks
 
