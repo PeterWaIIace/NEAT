@@ -12,7 +12,7 @@ import matplotlib.colors as mcolors
 
 from jax import jit
 from enum import Enum
-from arrayPainter import display_array, display_with_values
+from utils.arrayPainter import display_array, display_with_values
 from utils.random import StatefulRandomGenerator
 # First networkx library is imported  
 # along with matplotlib 

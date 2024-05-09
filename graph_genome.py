@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 from utils.random import StatefulRandomGenerator
 from enum import Enum 
-from arrayPainter import display_array, display_with_values
+from utils.arrayPainter import display_array, display_with_values
 
 Rnd = StatefulRandomGenerator()
 

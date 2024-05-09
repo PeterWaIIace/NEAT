@@ -3,3 +3,6 @@ neat_venv/*
 models/*
 _past_models/*
 xla_logs/*
+_*
+*_cache
+_past_models_multi/*
