@@ -1,3 +1,5 @@
+License: MIT - 2024.05.09
+
 # NEAT
 
 This is implementation of Neural Evolution of Augmenting Topologies using JAX, based on paper of [Kenneth O. Stanley and Risto Miikkulainen](https://nn.cs.utexas.edu/?stanley:ec02). I am huge fan of evolutionary techniques, so decided to design some tiny framework for using this. 
