@@ -629,7 +629,10 @@ class FeedForward:
 
 class NEAT:
 
-    def __init__(self,inputs=2, outputs=1, population_size = 10,
+    def __init__(self,
+                inputs=2, 
+                outputs=1, 
+                population_size = 10,
                 keep_top = 2,
                 nmc = 0.7,
                 cmc = 0.7,
@@ -790,3 +793,109 @@ class NEAT:
                 "N" : self.N,
             })
         return params
+
+class PNEAT:
+
+    def __init__(self):
+        self.rewards = []
+        self.env = None
+
+        self.N = 20
+        self.MATCHES = 3
+        self.GENERATIONS = 100
+        self.POPULATION_SIZE = 20
+        self.NMC = 0.9
+        self.CMC = 0.9
+        self.WMC = 0.9
+        self.BMC = 0.9
+        self.AMC = 0.9
+        self.δ_th = 5
+        self.MUTATE_RATE = 1
+        self.RENDER_HUMAN = True
+        self.epsylon = 0.2
+        self.INPUT_SIZE = 4
+        self.OUTPUT_SIZE = 2
+
+        self.neat = None
+
+        self.current_steps = 0
+        self.network = None
+
+    def __create(self):
+
+        self.neat = NEAT(
+            self.INPUT_SIZE,
+            self.OUTPUT_SIZE,
+            self.POPULATION_SIZE,
+            keep_top = 4,
+            nmc = 0.5,
+            cmc = 0.5,
+            wmc = 0.5,
+            bmc = 0.5,
+            amc = 0.5,
+            N = self.N,
+            δ_th = self.δ_th
+        )
+
+
+    def __mutate(self):
+        # EVOLVE EVERYTHING
+        self.neat.cross_over(δ_th = self.δ_th, N = self.N)
+        self.neat.mutate_weight(epsylon = self.epsylon, wmc=self.WMC)
+        self.neat.mutate_bias(epsylon = self.epsylon, bmc=self.BMC)
+        for _ in range(MUTATE_RATE):
+            self.neat.mutate_activation(amc=self.AMC)
+            self.neat.mutate_nodes(nmc=self.NMC)
+            self.neat.mutate_connections(cmc=self.CMC)
+        return self.neat
+
+    def set_env(self,env):
+        self.env = env
+
+    def train(self, total_timesteps, callback=None, log_interval=100, tb_log_name='run', reset_num_timesteps=True):
+        if not self.env:
+            return 
+
+        if not self.neat:
+            self.__create()
+
+        while self.current_steps < total_timesteps:
+            self.rewards = []
+
+            self.neat = mutate(self.rewards)
+            networks = self.neat.evaluate()
+
+            for n, network in enumerate(networks):
+                start_time = time.time()
+                
+                total_reward = 0
+                observation, _ = self.env.reset()
+                done = False       
+                while not done:
+                    
+                    actions = np.array(network.activate(observation))
+                    # take biggest value index and make it action performed
+                    observation, reward, trunacted, terminated, info = self.env.step(np.argmax(actions))
+                    self.current_steps += 1
+
+                    total_reward += reward
+                    done = trunacted or terminated
+
+                    # TODO: add callback exectution 
+
+                self.rewards.append(total_reward)
+            self.neat.update(self.rewards)
+
+        self.network = self.neat.evaluate()
+        self.env.close()
+
+
+    def predict(observation, state=None, mask=None, deterministic=False): 
+        if not self.network:
+            return 
+
+        if not self.env:
+            return 
+
+        actions = np.array(network.activate(observation))
+        return actions
