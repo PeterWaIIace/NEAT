@@ -1,3 +1,4 @@
+import os
 import copy
 import time
 import random
@@ -15,38 +16,51 @@ from src.activations import activation_func, act2name, NUMBER_OF_ACTIVATION_FUNC
 from src.genome import Genome, NodeTypes
 from src.misc import δ, sh, speciate, mate, cross_over
 from src.nn import Node
+
+import pygraphviz as pgv
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 # First networkx library is imported
 # along with matplotlib
-
 def graph(nodes, n, rows, cols):
-    # Create a directed graph
-    G = nx.DiGraph()
+    # Temporary filename (unique per subplot)
+    filename = f"graph_{n}.png"
 
-    # Add nodes to the graph
-    node_color_map = {
+    # Build Graphviz graph
+    G = pgv.AGraph(directed=True)
+    color_map = {
         NodeTypes.INPUT.value: "skyblue",
         NodeTypes.NODE.value: "lightgreen",
         NodeTypes.OUTPUT.value: "salmon",
     }
     for node in nodes:
-        index = int(node.index)
-        G.add_node(index, color=node_color_map[int(node.type)])
+        G.add_node(
+            int(node.index), 
+            color=color_map[int(node.type)], 
+            style="filled",
+            width="0.1",   # smaller radius
+            height="0.1",  # smaller radius
+            fixedsize="true",  # forces exact radius instead of auto-scaling to label
+        )
+        for inp in node.inputs:
+            G.add_edge(int(inp.index), int(node.index))
 
-    # Add edges to the graph based on inputs
-    for node in nodes:
-        for input in node.inputs:
-            index = int(node.index)
-            input = int(input.index)
-            G.add_edge(input, index)
+    # Layout + render
+    G.layout(prog="neato")   # "dot", "neato", "fdp", "sfdp" etc.
+    G.draw(filename)
 
-    # Draw the graph
-    # Create subplot
-    ax = plt.subplot(rows, cols, n + 1)  # ← this makes subplot n
-    pos = nx.spring_layout(G)  # Layout for better visualization
-    node_colors = [G.nodes[i]["color"] for i in G.nodes]
-
-    nx.draw(G, pos, ax=ax, with_labels=True, node_size=10, node_color=node_colors, font_size=2, font_weight="bold")
+    # Show inside a subplot
+    ax = plt.subplot(rows, cols, n + 1)
+    img = mpimg.imread(filename)
+    ax.imshow(img)
+    ax.axis("off")
     ax.set_title(f"Graph {n}")
+
+    # Optional: clean up file
+    os.remove(filename)
+
+    # Refresh plot occasionally
+    plt.draw()
     plt.pause(0.01)
 
 

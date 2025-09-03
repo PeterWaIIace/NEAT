@@ -159,6 +159,7 @@ class NEAT:
     def evaluate(self):
         """function for evaluating genomes into ff networks"""
         networks = []
+        plt.figure(figsize=(20, 20), dpi=150)
         plt.clf()
         for n, genome in enumerate(self.population):
             nodes = graphProcessor(genome)
@@ -241,7 +242,7 @@ class PNEAT:
             print(self.env.action_space, type(self.env.action_space), isinstance(self.env.action_space, Discrete))
             self.OUTPUT_SIZE = self.env.action_space.shape[1]
 
-        self.INPUT_SIZE = self.env.observation_space.shape[1]
+        self.INPUT_SIZE = self.env.observation_space.shape[-1]
         print(f"self.INPUT_SIZE: {self.INPUT_SIZE}")
         self.neat = NEAT(
             self.INPUT_SIZE,
